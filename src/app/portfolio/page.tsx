@@ -8,6 +8,9 @@ import React, { FormEvent, useCallback, useEffect, useMemo, useState } from 'rea
 import dayjs from 'dayjs';
 import { v4 as uuidv4 } from 'uuid';
 
+/* 👇 visibilità editor solo per l’autore */
+const canEdit = process.env.NEXT_PUBLIC_ENABLE_EDIT === 'true';
+
 /* ------------------------------------------------------------------ */
 /* COSTANTI                                                            */
 const INITIAL_CASH = 10_000;                // ⬅️ capitale di partenza
@@ -180,35 +183,41 @@ export default function PortfolioPage() {
     <main className="p-6 max-w-5xl mx-auto space-y-6">
       <h1 className="text-3xl font-bold">Portfolio</h1>
 
-      {/* form -------------------------------------------------------- */}
-      <form onSubmit={handleAdd} className="flex flex-wrap items-center gap-2">
-        <input className="border p-2 flex-1 min-w-[120px]" placeholder="Ticker"
-               value={ticker} onChange={e=>setTicker(e.target.value)} />
-        <input type="number" className="border p-2 w-24"
-               value={qty}  onChange={e=>setQty(Number(e.target.value))}/>
-        <input type="number" className="border p-2 w-24"
-               value={price} onChange={e=>setPrice(Number(e.target.value))}/>
-        <label className="flex items-center gap-1">
-          <input type="checkbox"
-                 checked={qty<0}
-                 onChange={e=>setQty(Math.abs(qty)*(e.target.checked?-1:1))}/>
-          Short
-        </label>
-        <button className="bg-blue-500 text-white px-4 py-2 rounded">Add</button>
-        <textarea className="border p-2 flex-[1_1_100%]" placeholder="Comment (optional)"
-                  value={note} onChange={e=>setNote(e.target.value)}/>
-      </form>
+      {/* form: solo se canEdit -------------------------------------- */}
+      {canEdit && (
+        <form onSubmit={handleAdd} className="flex flex-wrap items-center gap-2">
+          <input className="border p-2 flex-1 min-w-[120px]" placeholder="Ticker"
+                 value={ticker} onChange={e=>setTicker(e.target.value)} />
+          <input type="number" className="border p-2 w-24"
+                 value={qty}  onChange={e=>setQty(Number(e.target.value))}/>
+          <input type="number" className="border p-2 w-24"
+                 value={price} onChange={e=>setPrice(Number(e.target.value))}/>
+          <label className="flex items-center gap-1">
+            <input type="checkbox"
+                   checked={qty<0}
+                   onChange={e=>setQty(Math.abs(qty)*(e.target.checked?-1:1))}/>
+            Short
+          </label>
+          <button className="bg-blue-500 text-white px-4 py-2 rounded">Add</button>
+          <textarea className="border p-2 flex-[1_1_100%]" placeholder="Comment (optional)"
+                    value={note} onChange={e=>setNote(e.target.value)}/>
+        </form>
+      )}
 
       {/* controlli --------------------------------------------------- */}
       <div className="flex items-center gap-2">
-        <button onClick={resetDay}
-                className="bg-yellow-500 px-4 py-2 text-white rounded">
-          Reset Day
-        </button>
-        <button onClick={resetAll}
-                className="bg-red-600 px-4 py-2 text-white rounded">
-          Reset All
-        </button>
+        {canEdit && (
+          <>
+            <button onClick={resetDay}
+                    className="bg-yellow-500 px-4 py-2 text-white rounded">
+              Reset Day
+            </button>
+            <button onClick={resetAll}
+                    className="bg-red-600 px-4 py-2 text-white rounded">
+              Reset All
+            </button>
+          </>
+        )}
         <span className="ml-auto font-semibold">
           Cash: {cash.toLocaleString('it-IT',{style:'currency',currency:'EUR'})}
         </span>
@@ -288,4 +297,5 @@ export default function PortfolioPage() {
     </main>
   );
 }
+
 
