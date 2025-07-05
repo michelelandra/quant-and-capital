@@ -8,11 +8,11 @@ export const runtime = "edge";
  *  /api/quote?symbol=AAPL,TSLA,SPY     → [{ symbol:"AAPL", price:213.55 }, …]
  *  Usa Finnhub: https://finnhub.io/docs/api#quote
  * ========================================================================= */
-const FINNHUB_KEY = process.env.NEXT_PUBLIC_FINNHUB_KEY;
+const FINNHUB_KEY = process.env.NEXT_PUBLIC_FINNHUB_KEY as string;
 
 // helper ------------------------------------------------------------
-function json(obj: any, status = 200) {
-  return new Response(JSON.stringify(obj), {
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json" },
   });
@@ -25,7 +25,7 @@ async function fetchOne(symbol: string) {
 
   const { data } = await axios.get(url);
   /* Finnhub:  c = last, pc = prevClose ---------------------------------- */
-  const price = Number(data.c || data.pc || 0);
+  const price = Number((data as { c?: number; pc?: number }).c ?? data.pc ?? 0);
   return { symbol, price };
 }
 
@@ -45,9 +45,9 @@ export async function GET(req: NextRequest) {
     }
     const data = await Promise.all(symbols.map(fetchOne));
     return json(data);
-  } catch (err: any) {
-    console.error("Quote fetch failed:", err?.message);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Quote fetch failed:", (err as Error).message);
     return json({ error: "Fetch failed" }, 500);
   }
 }
-
