@@ -1,0 +1,17 @@
+[
+  {
+    "ticker": "AAPL",
+    "quantity": 10,
+    "averagePrice": 180
+  },
+  {
+    "ticker": "MSFT",
+    "quantity": 5,
+    "averagePrice": 340
+  },
+  {
+    "ticker": "NVDA",
+    "quantity": 2,
+    "averagePrice": 1200
+  }
+]
