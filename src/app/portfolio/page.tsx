@@ -297,6 +297,32 @@ export default function PortfolioPage() {
         </tbody>
       </table>
 
+      {/* transaction log --------------------------------------- */}
+<h2 className="font-semibold mt-12 mb-2">Transaction Log</h2>
+<table className="w-full text-sm border-collapse">
+  <thead className="border-b bg-gray-50">
+    <tr className="text-left">
+      <th>Date</th>
+      <th>Ticker</th>
+      <th>Qty</th>
+      <th>Price</th>
+      <th>Note</th>
+    </tr>
+  </thead>
+  <tbody>
+    {[...history].reverse().map((p) => (
+      <tr key={p.id} className="border-b">
+        <td>{p.date}</td>
+        <td>{p.ticker}</td>
+        <td className={p.qty < 0 ? "text-red-600" : ""}>{p.qty}</td>
+        <td>{p.price.toFixed(2)} €</td>
+        <td>{p.note || "—"}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+
+
       {/* grafico allocation ---------------------------------- */}
       <h2 className="font-semibold mb-2">Allocation €</h2>
       <ResponsiveContainer width="100%" height={250}>
