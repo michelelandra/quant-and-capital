@@ -3,6 +3,9 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { v4 as uuid } from 'uuid';
 
+/* 👇 visibilità editor solo per l’autore  */
+const canEdit = process.env.NEXT_PUBLIC_ENABLE_EDIT === 'true';
+
 type Analysis = {
   id: string;
   title: string;
@@ -59,43 +62,57 @@ export default function AnalysesPage() {
     <main className="max-w-3xl mx-auto p-6 space-y-8">
       <h1 className="text-3xl font-bold mb-4">Analyses</h1>
 
-      {/* form */}
-      <form onSubmit={handlePublish} className="space-y-2 border p-4 rounded">
-        <h2 className="font-semibold">New analysis</h2>
-        <input
-          className="border p-2 w-full"
-          placeholder="Title"
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-        />
-        <textarea
-          className="border p-2 w-full h-32"
-          placeholder="Body (markdown or plain text)"
-          value={body}
-          onChange={e => setBody(e.target.value)}
-        />
-        <input
-          className="border p-2 w-full"
-          placeholder="Media URL (optional image / pdf / link)"
-          value={media}
-          onChange={e => setMedia(e.target.value)}
-        />
-        <button className="bg-blue-600 text-white px-4 py-2 rounded">Publish</button>
-      </form>
+      {/* form: visibile solo se canEdit */}
+      {canEdit ? (
+  <form onSubmit={handlePublish} className="space-y-2 border p-4 rounded">
+    <h2 className="font-semibold">New analysis</h2>
+    <input
+      className="border p-2 w-full"
+      placeholder="Title"
+      value={title}
+      onChange={e => setTitle(e.target.value)}
+    />
+    <textarea
+      className="border p-2 w-full h-32"
+      placeholder="Body (markdown or plain text)"
+      value={body}
+      onChange={e => setBody(e.target.value)}
+    />
+    <input
+      className="border p-2 w-full"
+      placeholder="Media URL (optional image / pdf / link)"
+      value={media}
+      onChange={e => setMedia(e.target.value)}
+    />
+    <button className="bg-blue-600 text-white px-4 py-2 rounded">Publish</button>
+  </form>
+) : (
+  <p className="text-sm text-gray-500 italic mb-4">
+    Editing disabled for visitors.
+  </p>
+)}
+
 
       {/* elenco */}
-      {posts.length === 0 && <p className="text-gray-500">No analyses yet.</p>}
+      {posts.length === 0 && (
+        <p className="text-gray-500">No analyses yet.</p>
+      )}
       {posts.map(p => (
         <article key={p.id} className="border p-4 rounded relative mb-4">
-          <button
-            onClick={() => handleDelete(p.id)}
-            className="absolute top-2 right-2 text-sm text-red-600 hover:underline"
-          >
-            🗑️ Delete
-          </button>
+          {/* delete solo se canEdit */}
+          {canEdit && (
+            <button
+              onClick={() => handleDelete(p.id)}
+              className="absolute top-2 right-2 text-sm text-red-600 hover:underline"
+            >
+              🗑️ Delete
+            </button>
+          )}
 
           <h3 className="text-xl font-semibold">{p.title}</h3>
-          <time className="text-xs text-gray-500">{p.created.slice(0, 10)}</time>
+          <time className="text-xs text-gray-500">
+            {p.created.slice(0, 10)}
+          </time>
 
           <p className="whitespace-pre-line mt-2">{p.body}</p>
 
@@ -114,3 +131,4 @@ export default function AnalysesPage() {
     </main>
   );
 }
+
