@@ -37,21 +37,26 @@ const cards = [
 
 export default function HomePage() {
   return (
-    <div className="container mx-auto px-4 py-10 max-w-5xl">
+    <motion.div
+      className="container mx-auto px-4 py-10 max-w-5xl"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6 }}
+    >
       {/* Logo */}
       <div className="flex justify-center mb-6">
         <Image
-          src="/logo.png"
+          src="/logo1.png"
           alt="Quant & Capital Logo"
-          width={120}
-          height={120}
+          width={200}
+          height={200}
           className="rounded-full shadow-md"
         />
       </div>
 
       {/* Hero Section */}
       <header className="text-center mb-12">
-        <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight">
+        <h1 className="text-2xl sm:text-3xl font-extrabold leading-tight">
           Welcome to <span style={{ color: accent }}>Quant &amp; Capital</span>
         </h1>
         <p className="mt-4 max-w-2xl mx-auto text-lg text-gray-600">
@@ -76,7 +81,6 @@ export default function HomePage() {
 
       {/* About Me */}
       <details
-        open
         className="mb-12 border border-gray-200 rounded-xl backdrop-blur-sm bg-white/60 shadow-sm overflow-hidden"
       >
         <summary className="cursor-pointer px-4 py-3 font-semibold select-none text-lg">
@@ -144,6 +148,8 @@ export default function HomePage() {
           </a>
         </div>
       </footer>
-    </div>
+    </motion.div>
   );
 }
+
+
