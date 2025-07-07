@@ -364,17 +364,24 @@ const rows = useMemo(() => {
       <th>Note</th>
     </tr>
   </thead>
+
   <tbody>
-    {[...history].reverse().map((p) => (
-      <tr key={p.id} className="border-b">
-        <td>{p.date}</td>
-        <td>{p.ticker}</td>
-        <td className={p.qty < 0 ? "text-red-600" : ""}>{p.qty}</td>
-        <td>{p.price.toFixed(2)} €</td>
-        <td>{p.note || "—"}</td>
+  {[...history]
+    .sort((a, b) => b.date.localeCompare(a.date))   // più recente in alto
+    .map((tx) => (
+      <tr key={tx.id} className="border-b">
+        <td>{tx.date}</td>
+        <td>{tx.ticker}</td>
+        <td className={tx.qty < 0 ? "text-red-600" : ""}>
+          {tx.qty}
+        </td>
+        <td>{tx.price.toFixed(2)} €</td>
+        <td>{tx.note || "—"}</td>
       </tr>
-    ))}
-  </tbody>
+  ))}
+</tbody>
+
+
 </table>
 
 
