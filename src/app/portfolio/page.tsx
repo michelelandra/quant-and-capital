@@ -100,12 +100,15 @@ export default function PortfolioPage() {
 
   /* --------- righe tabella --------------------------------- */
   const rows = tickers.map((t) => {
-    const { qty: q, cost } = aggregate[t];
-    const cur = prices[t] ?? 0;
-    const avg = cost / q;
-    const pl = q * (cur - avg);
-    return { ticker: t, qty: q, avg, current: cur, pl };
-  });
+  const { qty: q, cost } = aggregate[t];
+  const cur = prices[t] ?? 0;
+  const avg = cost / q;
+  const pl = q * (cur - avg);
+  const plPct = Math.abs(q) > 0 ? (pl / (Math.abs(q) * avg)) * 100 : 0;
+
+  return { ticker: t, qty: q, avg, current: cur, pl, plPct };
+});
+
 
   /* --------- equity & performance --------------------------- */
   const equity = useMemo(
@@ -263,15 +266,17 @@ export default function PortfolioPage() {
       {/* tabella --------------------------------------------- */}
       <table className="w-full text-sm border-collapse">
         <thead className="border-b">
-          <tr className="text-left">
-            <th>Ticker</th>
-            <th>Qty</th>
-            <th>Avg.</th>
-            <th>Current</th>
-            <th>P/L</th>
-            <th>Note</th>
-          </tr>
-        </thead>
+  <tr className="text-left">
+    <th>Ticker</th>
+    <th>Qty</th>
+    <th>Avg.</th>
+    <th>Current</th>
+    <th>P/L</th>
+    <th>P/L %</th>
+    <th>Note</th>
+  </tr>
+</thead>
+
         <tbody>
           {rows.map((r) => (
             <tr key={r.ticker} className="border-b">
@@ -279,8 +284,14 @@ export default function PortfolioPage() {
               <td>{r.qty}</td>
               <td>{r.avg.toFixed(2)} €</td>
               <td>{r.current ? r.current.toFixed(2) + " €" : "—"}</td>
-              <td className={r.pl >= 0 ? "text-green-600" : "text-red-600"}>{r.pl.toFixed(2)} €</td>
-              <td>{history.find((p) => p.ticker === r.ticker)?.note ?? ""}</td>
+              <td className={r.pl >= 0 ? "text-green-600" : "text-red-600"}>
+  {r.pl.toFixed(2)} €
+</td>
+<td className={r.plPct >= 0 ? "text-green-600" : "text-red-600"}>
+  {r.plPct.toFixed(2)} %
+</td>
+<td>{history.find((p) => p.ticker === r.ticker)?.note ?? ""}</td>
+
             </tr>
           ))}
         </tbody>
