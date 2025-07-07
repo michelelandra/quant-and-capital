@@ -45,7 +45,7 @@ export default function PortfolioPage() {
   const [spyPrice, setSpyPrice] = useState<number>(0);
 const [sortBy, setSortBy]   = useState<"plPct" | "qty" | null>(null);
 const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-const [filterTicker, setFilterTicker] = useState<string>("");   // "" = tutti
+const [filterTicker] = useState<string>("");   // "" = tutti
 
 // ───────── download CSV helper ─────────
 const downloadCSV = (type: "history" | "positions") => {
