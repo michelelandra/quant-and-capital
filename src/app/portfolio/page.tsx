@@ -316,18 +316,25 @@ const rows = useMemo(() => {
         <thead className="border-b">
   <tr className="text-left">
     <th>Ticker</th>
-    <th onClick={() => toggleSort("qty")}  className="cursor-pointer select-none">
-      Qty
+    <th>
+      <button onClick={() => toggleSort("qty")} className="flex items-center gap-1">
+        Qty
+        {sortBy === "qty" && (sortDir === "asc" ? "▲" : "▼")}
+      </button>
     </th>
     <th>Avg.</th>
     <th>Current</th>
     <th>P/L</th>
-    <th onClick={() => toggleSort("plPct")} className="cursor-pointer select-none">
-      P/L %
+    <th>
+      <button onClick={() => toggleSort("plPct")} className="flex items-center gap-1">
+        P/L %
+        {sortBy === "plPct" && (sortDir === "asc" ? "▲" : "▼")}
+      </button>
     </th>
     <th>Note</th>
   </tr>
 </thead>
+
 
 
         <tbody>
