@@ -188,11 +188,26 @@ const rows = useMemo(() => {
 
   /* --------- equity & performance --------------------------- */
   const equity = useMemo(
-    () => history.reduce((e, p) => e + p.qty * (prices[p.ticker] ?? p.price), 0) + cash,
-    [history, prices, cash]
-  );
+  () =>
+    history.reduce(
+      (e, p) => e + p.qty * (prices[p.ticker] ?? p.price),
+      0
+    ) + cash,
+  [history, prices, cash]
+);
 
-  const portPct = ((equity / INITIAL_CASH) - 1) * 100;
+const realizedPL = useMemo(() => {
+  return history
+    .filter(p => p.date !== today)
+    .reduce((sum, p) => {
+      const cur = prices[p.ticker] ?? p.price;
+      return sum + p.qty * (cur - p.price);
+    }, 0);
+}, [history, prices, today]);
+
+const unrealizedPL = rows.reduce((s, r) => s + r.pl, 0);
+
+const portPct = ((equity / INITIAL_CASH) - 1) * 100;
 
   /* --------- % S&P 500 -------------------------------------- */
   const baseSpy = typeof window !== "undefined" ? Number(localStorage.getItem(SPY_BASE_KEY) || 0) : 0;
@@ -288,19 +303,20 @@ const rows = useMemo(() => {
   return (
     <main className="p-6 max-w-5xl mx-auto space-y-6">
       <h1 className="text-3xl font-bold">Portfolio</h1>
-<div className="flex gap-4 items-center mb-4">
-  <label className="font-semibold">Filter Ticker:</label>
-  <select
-    className="border p-1 rounded"
-    value={filterTicker}
-    onChange={e => setFilterTicker(e.target.value)}
-  >
-    <option value="">All</option>
-    {tickers.map(t => (
-      <option key={t} value={t}>{t}</option>
-    ))}
-  </select>
+
+{/* Realized / Unrealized P/L -------------------------------- */}
+<div className="text-sm text-gray-700 mb-4">
+  Realized&nbsp;P/L:&nbsp;
+  <span className={realizedPL >= 0 ? "text-green-600" : "text-red-600"}>
+    {realizedPL.toFixed(2)} €
+  </span>
+  &nbsp;|&nbsp;
+  Unrealized&nbsp;P/L:&nbsp;
+  <span className={unrealizedPL >= 0 ? "text-green-600" : "text-red-600"}>
+    {unrealizedPL.toFixed(2)} €
+  </span>
 </div>
+
 
       {/* form -------------------------------------------------- */}
       {canEdit && (
