@@ -43,6 +43,18 @@ export default function PortfolioPage() {
   const [note, setNote]         = useState("");
   const [prices, setPrices]     = useState<Record<string, number>>({});
   const [spyPrice, setSpyPrice] = useState<number>(0);
+const [sortBy, setSortBy]   = useState<"plPct" | "qty" | null>(null);
+const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+const [filterTicker, setFilterTicker] = useState<string>("");   // "" = tutti
+const toggleSort = (field: "plPct" | "qty") => {
+  if (sortBy === field) {
+    setSortDir(d => (d === "asc" ? "desc" : "asc"));
+  } else {
+    setSortBy(field);
+    setSortDir("desc");
+  }
+};
+
 
   const today = dayjs().format("YYYY-MM-DD");
 
@@ -99,15 +111,33 @@ export default function PortfolioPage() {
   }, [fetchPrices, tickers.join(",")]);
 
   /* --------- righe tabella --------------------------------- */
-  const rows = tickers.map((t) => {
+  // ---- righe tabella con P/L %, filtro e ordinamento ----
+const baseRows = tickers.map(t => {
   const { qty: q, cost } = aggregate[t];
-  const cur = prices[t] ?? 0;
-  const avg = cost / q;
-  const pl = q * (cur - avg);
+  const cur  = prices[t] ?? 0;
+  const avg  = cost / q;
+  const pl   = q * (cur - avg);
   const plPct = Math.abs(q) > 0 ? (pl / (Math.abs(q) * avg)) * 100 : 0;
-
   return { ticker: t, qty: q, avg, current: cur, pl, plPct };
 });
+
+const rows = useMemo(() => {
+  let r = [...baseRows];
+
+  /* filtro ticker */
+  if (filterTicker) r = r.filter(row => row.ticker === filterTicker);
+
+  /* ordinamento */
+  if (sortBy) {
+    r.sort((a, b) =>
+      sortDir === "asc"
+        ? a[sortBy]! - b[sortBy]!
+        : b[sortBy]! - a[sortBy]!
+    );
+  }
+  return r;
+}, [baseRows, filterTicker, sortBy, sortDir]);
+
 
 
   /* --------- equity & performance --------------------------- */
@@ -212,6 +242,24 @@ export default function PortfolioPage() {
   return (
     <main className="p-6 max-w-5xl mx-auto space-y-6">
       <h1 className="text-3xl font-bold">Portfolio</h1>
+<div className="flex flex-wrap items-center gap-4 mt-4">
+  <label className="flex items-center gap-2">
+    <input
+      type="checkbox"
+      checked={sortBy === "plPct"}
+      onChange={() => toggleSort("plPct")}
+    />
+    Sort by P/L %
+  </label>
+  <label className="flex items-center gap-2">
+    <input
+      type="checkbox"
+      checked={sortBy === "qty"}
+      onChange={() => toggleSort("qty")}
+    />
+    Sort by Quantity
+  </label>
+</div>
 
       {/* form -------------------------------------------------- */}
       {canEdit && (
@@ -268,14 +316,19 @@ export default function PortfolioPage() {
         <thead className="border-b">
   <tr className="text-left">
     <th>Ticker</th>
-    <th>Qty</th>
+    <th onClick={() => toggleSort("qty")}  className="cursor-pointer select-none">
+      Qty
+    </th>
     <th>Avg.</th>
     <th>Current</th>
     <th>P/L</th>
-    <th>P/L %</th>
+    <th onClick={() => toggleSort("plPct")} className="cursor-pointer select-none">
+      P/L %
+    </th>
     <th>Note</th>
   </tr>
 </thead>
+
 
         <tbody>
           {rows.map((r) => (
