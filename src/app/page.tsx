@@ -49,7 +49,7 @@ export default function HomePage() {
           Welcome to <span className="text-[#b5121b]">Quant & Capital</span>
         </h1>
         <p className="text-lg md:text-xl text-center text-gray-600 max-w-2xl mt-4">
-          Sharing my journey through quantitative finance, market analyses and mathematical explorations.
+          A lab where i show my journey through quantitative finance, market analyses and mathematical explorations.
         </p>
         <Link href="/portfolio">
           <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded mt-6">
