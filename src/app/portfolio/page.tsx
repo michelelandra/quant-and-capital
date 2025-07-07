@@ -242,23 +242,18 @@ const rows = useMemo(() => {
   return (
     <main className="p-6 max-w-5xl mx-auto space-y-6">
       <h1 className="text-3xl font-bold">Portfolio</h1>
-<div className="flex flex-wrap items-center gap-4 mt-4">
-  <label className="flex items-center gap-2">
-    <input
-      type="checkbox"
-      checked={sortBy === "plPct"}
-      onChange={() => toggleSort("plPct")}
-    />
-    Sort by P/L %
-  </label>
-  <label className="flex items-center gap-2">
-    <input
-      type="checkbox"
-      checked={sortBy === "qty"}
-      onChange={() => toggleSort("qty")}
-    />
-    Sort by Quantity
-  </label>
+<div className="flex gap-4 items-center mb-4">
+  <label className="font-semibold">Filter Ticker:</label>
+  <select
+    className="border p-1 rounded"
+    value={filterTicker}
+    onChange={e => setFilterTicker(e.target.value)}
+  >
+    <option value="">All</option>
+    {tickers.map(t => (
+      <option key={t} value={t}>{t}</option>
+    ))}
+  </select>
 </div>
 
       {/* form -------------------------------------------------- */}
