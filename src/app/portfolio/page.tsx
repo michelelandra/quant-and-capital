@@ -46,6 +46,52 @@ export default function PortfolioPage() {
 const [sortBy, setSortBy]   = useState<"plPct" | "qty" | null>(null);
 const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 const [filterTicker, setFilterTicker] = useState<string>("");   // "" = tutti
+
+// ───────── download CSV helper ─────────
+const downloadCSV = (type: "history" | "positions") => {
+  let data: string[][] = [];
+
+  if (type === "history") {
+    data = [
+      ["Date", "Ticker", "Qty", "Price", "Note"],
+      ...history.map(h => [
+        h.date,
+        h.ticker,
+        String(h.qty),
+        h.price.toFixed(2),
+        h.note ?? "",
+      ])
+    ];
+  }
+
+  if (type === "positions") {
+    data = [
+      ["Ticker", "Qty", "Avg", "Current", "P/L", "P/L %"],
+      ...rows.map(r => [
+        r.ticker,
+        String(r.qty),
+        r.avg.toFixed(2),
+        r.current.toFixed(2),
+        r.pl.toFixed(2),
+        r.plPct.toFixed(2),
+      ])
+    ];
+  }
+
+  const csvContent = data.map(e => e.join(",")).join("\\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", `${type}_export.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+// ───────────────────────────────────────
+
+
 const toggleSort = (field: "plPct" | "qty") => {
   if (sortBy === field) {
     setSortDir(d => (d === "asc" ? "desc" : "asc"));
@@ -305,6 +351,22 @@ const rows = useMemo(() => {
           Cash: {cash.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
         </span>
       </div>
+
+{/* pulsanti export ---------------------------------------- */}
+<div className="flex gap-4 items-center mt-2">
+  <button
+    onClick={() => downloadCSV("history")}
+    className="bg-gray-600 text-white px-3 py-1 rounded"
+  >
+    Export Transaction Log
+  </button>
+  <button
+    onClick={() => downloadCSV("positions")}
+    className="bg-gray-600 text-white px-3 py-1 rounded"
+  >
+    Export Portfolio
+  </button>
+</div>
 
       {/* tabella --------------------------------------------- */}
       <table className="w-full text-sm border-collapse">
