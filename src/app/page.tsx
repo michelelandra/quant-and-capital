@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { BookOpen, BarChart3, Brain, Calculator, Settings } from 'lucide-react';
+import { BarChart3, Brain, Calculator, Settings } from 'lucide-react';
 
 export default function HomePage() {
   const [aboutOpen, setAboutOpen] = useState(false);
