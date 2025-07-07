@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Instagram, Linkedin, BarChart3, Brain, Calculator, Settings } from "lucide-react";
+import Image from "next/image";
 
 // Tailwind colour for brand accent
 const accent = "#8b1d1d";
@@ -37,6 +38,17 @@ const cards = [
 export default function HomePage() {
   return (
     <div className="container mx-auto px-4 py-10 max-w-5xl">
+      {/* Logo */}
+      <div className="flex justify-center mb-6">
+        <Image
+          src="/logo.png"
+          alt="Quant & Capital Logo"
+          width={120}
+          height={120}
+          className="rounded-full shadow-md"
+        />
+      </div>
+
       {/* Hero Section */}
       <header className="text-center mb-12">
         <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight">
@@ -73,13 +85,13 @@ export default function HomePage() {
         <div className="px-4 py-3 text-gray-700 leading-relaxed">
           <p className="mb-2">
             Hi, I’m <span className="font-semibold">Michele Landra</span>, an
-            Economics &amp; Finance student at <span className="font-semibold">Bocconi University</span> passionate about data‑driven
+            Economics &amp; Finance student at <span className="font-semibold">Bocconi University</span> passionate about data-driven
             investing and quantitative research.
           </p>
           <p className="mb-2">
             This site is my public lab notebook: I track simulated portfolios,
-            publish market commentaries, and share mathematical deep‑dives that
-            connect theory with real‑world markets.
+            publish market commentaries, and share mathematical deep-dives that
+            connect theory with real-world markets.
           </p>
           <p>
             Explore, challenge the ideas, and feel free to reach out with
@@ -135,4 +147,3 @@ export default function HomePage() {
     </div>
   );
 }
-
