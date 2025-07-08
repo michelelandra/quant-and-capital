@@ -195,6 +195,22 @@ const rows = useMemo(() => {
   }
   return r;
 }, [baseRows, filterTicker, sortBy, sortDir]);
+const insights = useMemo(() => {
+  if (!rows.length) return null;
+
+  const sortedByPL = [...rows].sort((a, b) => b.plPct - a.plPct);
+  const sortedByValue = [...rows].sort((a, b) =>
+    Math.abs(b.qty * b.current) - Math.abs(a.qty * a.current)
+  );
+  const sortedByImpact = [...rows].sort((a, b) => Math.abs(b.pl) - Math.abs(a.pl));
+
+  return {
+    topGainer: sortedByPL[0],
+    topLoser: sortedByPL[sortedByPL.length - 1],
+    largestPosition: sortedByValue[0],
+    mostImpactful: sortedByImpact[0],
+  };
+}, [rows]);
 
 
 
@@ -450,6 +466,37 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
           ))}
         </tbody>
       </table>
+
+      {/* Insights ------------------------------------------------ */}
+{insights && (
+  <div className="grid sm:grid-cols-2 gap-4 mt-8 text-sm bg-gray-50 p-4 rounded-lg shadow-inner border">
+    <div>
+      <strong>📈 Top Gainer:</strong>{" "}
+      {insights.topGainer.ticker} ({insights.topGainer.plPct.toFixed(2)}%)
+    </div>
+    <div>
+      <strong>📉 Top Loser:</strong>{" "}
+      {insights.topLoser.ticker} ({insights.topLoser.plPct.toFixed(2)}%)
+    </div>
+    <div>
+      <strong>💰 Largest Position:</strong>{" "}
+      {insights.largestPosition.ticker} (
+      {(
+        (Math.abs(
+          insights.largestPosition.qty * insights.largestPosition.current
+        ) /
+          equity) *
+        100
+      ).toFixed(2)}
+      %)
+    </div>
+    <div>
+      <strong>📊 Most Impactful:</strong>{" "}
+      {insights.mostImpactful.ticker} ({insights.mostImpactful.pl.toFixed(2)} €)
+    </div>
+  </div>
+)}
+
 
       {/* transaction log --------------------------------------- */}
 <h2 className="font-semibold mt-12 mb-2">Transaction Log</h2>
