@@ -19,6 +19,12 @@ const STORAGE_KEY  = "portfolio";
 const HISTORY_KEY  = "portfolio_history";
 const SPY_BASE_KEY = "spy_base";            // primo prezzo SPY per % benchmark
 const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#8dd1e1"];
+const SUGGESTED_TICKERS = [
+  "AAPL","MSFT","GOOGL","AMZN","TSLA","META","NVDA","BRK.B",
+  "JPM","V","SPY","QQQ","NFLX","BABA","UNH","XOM","NKE",
+  "INTC","AMD"
+];
+
 
 /* ------------------------------------------------------------- */
 /* TIPI                                                           */
@@ -133,6 +139,12 @@ const toggleSort = (field: "plPct" | "qty") => {
   }, [history]);
 
   const tickers = Object.keys(aggregate);
+  // ticker statici + quelli attualmente presenti nel portafoglio
+const allSuggestions = useMemo(
+  () => Array.from(new Set([...SUGGESTED_TICKERS, ...tickers])),
+  [tickers]
+);
+
 
   /* --------- fetch prezzi ----------------------------------- */
   const fetchPrices = useCallback(async (syms: string[]) => {
@@ -322,11 +334,20 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
       {canEdit && (
         <form onSubmit={handleAdd} className="flex flex-wrap items-center gap-2">
           <input
-            className="border p-2 flex-1 min-w-[120px]"
-            placeholder="Ticker"
-            value={ticker}
-            onChange={(e) => setTicker(e.target.value)}
-          />
+  className="border p-2 flex-1 min-w-[120px]"
+  placeholder="Ticker"
+  list="ticker-list"
+  value={ticker}
+  onChange={(e) => setTicker(e.target.value)}
+/>
+<datalist id="ticker-list">
+  {allSuggestions.map(t => (
+    <option key={t} value={t} />
+  ))}
+</datalist>
+
+
+
           <input
             type="number"
             className="border p-2 w-24"
