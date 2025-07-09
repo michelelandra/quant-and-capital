@@ -1,19 +1,11 @@
 {
-  "cash": 8055.530000000001,
+  "cash": 9788.86,
   "history": [
     {
-      "id": "7fd77578-2b06-4802-addf-88021db63a2c",
-      "ticker": "BRK.B",
+      "id": "e9b786be-6ca0-4340-b790-271094cbbefe",
+      "ticker": "AAPL",
       "qty": 1,
-      "price": 478.91,
-      "note": "",
-      "date": "2025-07-10"
-    },
-    {
-      "id": "0a2416bc-461c-4ed2-9a92-1e0ff6481454",
-      "ticker": "META",
-      "qty": 2,
-      "price": 732.78,
+      "price": 211.14,
       "note": "",
       "date": "2025-07-10"
     }

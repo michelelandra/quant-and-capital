@@ -351,13 +351,26 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
   };
 
   const resetAll = () => {
-    setHistory([]);
-    setCash(INITIAL_CASH);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem(HISTORY_KEY);
-      localStorage.removeItem(SPY_BASE_KEY);
-    }
-  };
+  setHistory([]);
+  setCash(INITIAL_CASH);
+
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(HISTORY_KEY);
+    localStorage.removeItem(SPY_BASE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  if (canEdit) {
+    fetch("/api/portfolio", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cash: INITIAL_CASH, history: [] }),
+    }).catch((err) =>
+      console.error("Error saving reset portfolio to file:", err)
+    );
+  }
+};
+
 const handleSave = async () => {
   try {
     const res = await fetch("/api/portfolio", {
