@@ -1,13 +1,4 @@
 {
-  "cash": 9704.12,
-  "history": [
-    {
-      "id": "45de8cd6-6351-43d1-a090-e885693e2022",
-      "ticker": "TSLA",
-      "qty": 1,
-      "price": 295.88,
-      "note": "elon",
-      "date": "2025-07-09"
-    }
-  ]
+  "cash": 10000,
+  "history": []
 }

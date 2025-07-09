@@ -362,6 +362,18 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
   return (
     <main className="p-6 max-w-5xl mx-auto space-y-6">
       <h1 className="text-3xl font-bold">Portfolio</h1>
+      {/* Strategy Summary ------------------------------------------------ */}
+<div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded shadow-sm text-sm">
+  <p className="font-semibold mb-1">📌 Strategy Summary</p>
+  <p>
+  This portfolio reflects a macro-aware strategy designed to navigate global economic cycles by combining defensive assets with high-risk, high-conviction plays — including short positions, cryptocurrencies, and innovation-driven sectors. Emphasis is placed on tech, AI, and emerging trends.
+</p>
+  <p className="text-xs text-gray-500 mt-2">
+    Last updated:&nbsp;
+    {history.length > 0 ? history[history.length - 1].date : "—"}
+  </p>
+</div>
+
 
 {/* Realized / Unrealized P/L -------------------------------- */}
 <div className="text-sm text-gray-700 mb-4">
@@ -400,7 +412,7 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
             className="border p-2 w-24"
             value={qty}
             onChange={(e) => setQty(Number(e.target.value))}
-            title="Quantità: positiva = long, negativa = short" 
+            title="Quantity: positive = long, negative = short" 
 
           />
           <label className="flex items-center gap-1">
@@ -412,7 +424,7 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
             Short
           </label>
           <button className="bg-blue-500 text-white px-4 py-2 rounded"
-          title="Inserisci l'operazione nel portafoglio">Add</button>
+          title="Insert the operation in the portfolio">Add</button>
           <textarea
             className="border p-2 flex-[1_1_100%]"
             placeholder="Comment (optional)"
