@@ -366,7 +366,10 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
 <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded shadow-sm text-sm">
   <p className="font-semibold mb-1">📌 Strategy Summary</p>
   <p>
-  This portfolio reflects a macro-aware strategy designed to navigate global economic cycles by combining defensive assets with high-risk, high-conviction plays — including short positions, cryptocurrencies, and innovation-driven sectors. Emphasis is placed on tech, AI, and emerging trends.
+  This portfolio reflects a macro-aware strategy designed to navigate global
+  economic cycles by combining defensive assets with high-risk, high-conviction
+  plays — including short positions, cryptocurrencies, and leveraged instruments
+  (2x, 3x, and 4x exposure). The focus is on tech, AI, and emerging market trends.
 </p>
   <p className="text-xs text-gray-500 mt-2">
     Last updated:&nbsp;
@@ -593,6 +596,7 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
             ))}
           </Pie>
           <Tooltip formatter={(v: number) => v.toFixed(2) + " €"} />
+            <Legend verticalAlign="bottom" height={36} />
         </PieChart>
       </ResponsiveContainer>
 
@@ -613,6 +617,9 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
           </BarChart>
         </ResponsiveContainer>
       </div>
+      <p className="text-xs text-gray-500 mt-1">
+  * Percentage performance based on initial equity of €10,000.
+</p>
 
       {/* performance % --------------------------------------- */}
       <h2 className="font-semibold">Portfolio vs S&P 500 (%)</h2>
