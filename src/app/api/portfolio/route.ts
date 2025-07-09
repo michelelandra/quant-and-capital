@@ -10,9 +10,10 @@ export async function GET() {
     const jsonData = await fs.readFile(FILE_PATH, "utf-8");
     const data = JSON.parse(jsonData);
     return NextResponse.json(data);
-  } catch (err) {
-    return NextResponse.json({ cash: 10000, history: [] });
-  }
+  } catch {
+  return NextResponse.json({ cash: 10000, history: [] });
+}
+
 }
 
 export async function POST(req: NextRequest) {

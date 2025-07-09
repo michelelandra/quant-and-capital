@@ -1,4 +1,13 @@
 {
-  "cash": 10000,
-  "history": []
+  "cash": 8944.3,
+  "history": [
+    {
+      "id": "9d308dc2-146f-4302-b5ed-5d1423294526",
+      "ticker": "AAPL",
+      "qty": 5,
+      "price": 211.14,
+      "note": "duration",
+      "date": "2025-07-09"
+    }
+  ]
 }
