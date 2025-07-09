@@ -226,6 +226,7 @@ const rows = useMemo(() => {
   }
   return r;
 }, [baseRows, filterTicker, sortBy, sortDir]);
+
 const insights = useMemo(() => {
   if (!rows.length) return null;
 
@@ -238,7 +239,7 @@ const insights = useMemo(() => {
   return {
     topGainer: sortedByPL[0],
     topLoser: sortedByPL[sortedByPL.length - 1],
-    largestPosition: sortedByValue[0],
+    largestPosition: sortedByImpact[0],
     mostImpactful: sortedByImpact[0],
   };
 }, [rows]);
@@ -480,15 +481,14 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
 </div>
 
       {/* tabella --------------------------------------------- */}
-      <table className="w-full text-sm border-collapse">
-
-        <thead className="border-b">
+      <div className="overflow-x-auto rounded border border-gray-200 shadow-sm bg-white bg-opacity-90">
+  <table className="min-w-[600px] text-sm w-full">
+    <thead className="border-b">
   <tr className="text-left">
     <th>Ticker</th>
     <th>
       <button onClick={() => toggleSort("qty")} className="flex items-center gap-1">
-        Qty
-        {sortBy === "qty" && (sortDir === "asc" ? "▲" : "▼")}
+        Qty {sortBy === "qty" && (sortDir === "asc" ? "▲" : "▼")}
       </button>
     </th>
     <th>Avg.</th>
@@ -496,35 +496,34 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
     <th>P/L</th>
     <th>
       <button onClick={() => toggleSort("plPct")} className="flex items-center gap-1">
-        P/L %
-        {sortBy === "plPct" && (sortDir === "asc" ? "▲" : "▼")}
+        P/L % {sortBy === "plPct" && (sortDir === "asc" ? "▲" : "▼")}
       </button>
     </th>
     <th>Note</th>
   </tr>
 </thead>
 
+<tbody>
+  {rows.map((r) => (
+    <tr key={r.ticker} className="border-b">
+      <td>{r.ticker}</td>
+      <td>{r.qty}</td>
+      <td>{r.avg.toFixed(2)} €</td>
+      <td>{r.current ? r.current.toFixed(2) + " €" : "—"}</td>
+      <td className={r.pl >= 0 ? "text-green-600" : "text-red-600"}>
+        {r.pl.toFixed(2)} €
+      </td>
+      <td className={r.plPct >= 0 ? "text-green-600" : "text-red-600"}>
+        {r.plPct.toFixed(2)} %
+      </td>
+      <td>{history.find((p) => p.ticker === r.ticker)?.note ?? ""}</td>
+    </tr>
+  ))}
+</tbody>
+</table>
+</div>
 
 
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.ticker} className="border-b">
-              <td>{r.ticker}</td>
-              <td>{r.qty}</td>
-              <td>{r.avg.toFixed(2)} €</td>
-              <td>{r.current ? r.current.toFixed(2) + " €" : "—"}</td>
-              <td className={r.pl >= 0 ? "text-green-600" : "text-red-600"}>
-  {r.pl.toFixed(2)} €
-</td>
-<td className={r.plPct >= 0 ? "text-green-600" : "text-red-600"}>
-  {r.plPct.toFixed(2)} %
-</td>
-<td>{history.find((p) => p.ticker === r.ticker)?.note ?? ""}</td>
-
-            </tr>
-          ))}
-        </tbody>
-      </table>
 
       {/* Insights ------------------------------------------------ */}
 {insights && (
