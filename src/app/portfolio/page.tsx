@@ -110,22 +110,53 @@ const toggleSort = (field: "plPct" | "qty") => {
 
   const today = dayjs().format("YYYY-MM-DD");
 
-  /* --------- carica da localStorage -------------------------- */
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const { cash: c, history: h } = JSON.parse(saved);
-      setCash(c);
-      setHistory(h);
-    }
-  }, []);
+  /* --------- caricamento iniziale ------------------------------ */
+useEffect(() => {
+  // 1) Visitatori (canEdit === false) → legge dal file JSON via API
+  if (!canEdit) {
+    fetch("/api/portfolio")
+      .then(res => res.json())
+      .then(({ cash: c, history: h }) => {
+        setCash(c);
+        setHistory(h);
+      })
+      .catch(() => {
+        /* fallback: lascia stato vuoto se la fetch fallisce */
+      });
+    return;                 // ⬅️  Stop qui per chi non può editare
+  }
+
+  // 2) Tu (canEdit === true) → continui con localStorage
+  if (typeof window === "undefined") return;
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    const { cash: c, history: h } = JSON.parse(saved);
+    setCash(c);
+    setHistory(h);
+  }
+}, []);
+
 
   /* --------- persistenza ------------------------------------ */
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ cash, history }));
-  }, [cash, history]);
+useEffect(() => {
+  if (!canEdit) return;  // ⬅️ solo tu puoi salvare su localStorage
+  if (typeof window === "undefined") return;
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ cash, history }));
+}, [cash, history]);
+
+/* --------- salva sul file JSON pubblico ------------------- */
+useEffect(() => {
+  if (!canEdit) return;                  // i visitatori non postano nulla
+  fetch("/api/portfolio", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cash, history }),
+  }).catch(() => {
+    // opzionale: mostrare errore o log
+  });
+}, [cash, history]);
+
 
   /* --------- aggregati -------------------------------------- */
   const aggregate = useMemo(() => {
