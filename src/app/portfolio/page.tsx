@@ -371,8 +371,9 @@ const handleSave = async () => {
       alert("Failed to save portfolio.");
     }
   } catch (err) {
-    alert("Error saving portfolio.");
-  }
+  console.error("Error saving to file:", err);
+}
+
 };
 
   /* ----------------------------------------------------------- */
