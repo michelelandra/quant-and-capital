@@ -361,7 +361,10 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
   /* ----------------------------------------------------------- */
   return (
     <main className="p-6 max-w-5xl mx-auto space-y-6">
-      <h1 className="text-3xl font-bold">Portfolio</h1>
+      <h1 className="text-4xl font-bold text-gray-800 mb-2 tracking-tight">
+  My Investment Portfolio
+</h1>
+
       {/* Strategy Summary ------------------------------------------------ */}
 <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded shadow-sm text-sm">
   <p className="font-semibold mb-1">📌 Strategy Summary</p>
@@ -379,17 +382,21 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
 
 
 {/* Realized / Unrealized P/L -------------------------------- */}
-<div className="text-sm text-gray-700 mb-4">
-  Realized&nbsp;P/L:&nbsp;
-  <span className={realizedPL >= 0 ? "text-green-600" : "text-red-600"}>
-    {realizedPL.toFixed(2)} €
+<div className="flex flex-wrap items-center gap-4 text-sm text-gray-700 mb-6 bg-white/80 p-3 rounded-lg shadow-sm border border-gray-200">
+  <span>
+    <span className="font-medium">Realized P/L:</span>{" "}
+    <span className={realizedPL >= 0 ? "text-green-600" : "text-red-600"}>
+      {realizedPL.toFixed(2)} €
+    </span>
   </span>
-  &nbsp;|&nbsp;
-  Unrealized&nbsp;P/L:&nbsp;
-  <span className={unrealizedPL >= 0 ? "text-green-600" : "text-red-600"}>
-    {unrealizedPL.toFixed(2)} €
+  <span>
+    <span className="font-medium">Unrealized P/L:</span>{" "}
+    <span className={unrealizedPL >= 0 ? "text-green-600" : "text-red-600"}>
+      {unrealizedPL.toFixed(2)} €
+    </span>
   </span>
 </div>
+
 
 
       {/* form -------------------------------------------------- */}
@@ -441,12 +448,14 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
       <div className="flex items-center gap-2">
         {canEdit && (
           <>
-            <button onClick={resetDay} className="bg-yellow-500 px-4 py-2 text-white rounded">
-              Reset Day
-            </button>
-            <button onClick={resetAll} className="bg-red-600 px-4 py-2 text-white rounded">
-              Reset All
-            </button>
+            <button onClick={resetDay} className="bg-yellow-500 hover:bg-yellow-600 px-4 py-2 text-white rounded transition-colors duration-200">
+  Reset Day
+</button>
+
+<button onClick={resetAll} className="bg-red-600 hover:bg-red-700 px-4 py-2 text-white rounded transition-colors duration-200">
+  Reset All
+</button>
+
           </>
         )}
         <span className="ml-auto font-semibold">
@@ -472,6 +481,7 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
 
       {/* tabella --------------------------------------------- */}
       <table className="w-full text-sm border-collapse">
+
         <thead className="border-b">
   <tr className="text-left">
     <th>Ticker</th>
