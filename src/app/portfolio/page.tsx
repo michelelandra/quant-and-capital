@@ -400,6 +400,8 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
             className="border p-2 w-24"
             value={qty}
             onChange={(e) => setQty(Number(e.target.value))}
+            title="Quantità: positiva = long, negativa = short" 
+
           />
           <label className="flex items-center gap-1">
             <input
@@ -409,7 +411,8 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
             />
             Short
           </label>
-          <button className="bg-blue-500 text-white px-4 py-2 rounded">Add</button>
+          <button className="bg-blue-500 text-white px-4 py-2 rounded"
+          title="Inserisci l'operazione nel portafoglio">Add</button>
           <textarea
             className="border p-2 flex-[1_1_100%]"
             placeholder="Comment (optional)"

@@ -1,12 +1,12 @@
 {
-  "cash": 8944.3,
+  "cash": 9704.12,
   "history": [
     {
-      "id": "9d308dc2-146f-4302-b5ed-5d1423294526",
-      "ticker": "AAPL",
-      "qty": 5,
-      "price": 211.14,
-      "note": "duration",
+      "id": "45de8cd6-6351-43d1-a090-e885693e2022",
+      "ticker": "TSLA",
+      "qty": 1,
+      "price": 295.88,
+      "note": "elon",
       "date": "2025-07-09"
     }
   ]
