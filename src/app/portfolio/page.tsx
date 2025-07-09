@@ -231,15 +231,15 @@ const insights = useMemo(() => {
   if (!rows.length) return null;
 
   const sortedByPL = [...rows].sort((a, b) => b.plPct - a.plPct);
-  const sortedByValue = [...rows].sort((a, b) =>
-    Math.abs(b.qty * b.current) - Math.abs(a.qty * a.current)
-  );
+  
   const sortedByImpact = [...rows].sort((a, b) => Math.abs(b.pl) - Math.abs(a.pl));
 
   return {
     topGainer: sortedByPL[0],
     topLoser: sortedByPL[sortedByPL.length - 1],
-    largestPosition: sortedByImpact[0],
+   largestPosition: [...rows]
+  .sort((a, b) => Math.abs(b.qty * b.current) - Math.abs(a.qty * a.current))[0],
+
     mostImpactful: sortedByImpact[0],
   };
 }, [rows]);
