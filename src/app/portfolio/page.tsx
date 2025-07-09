@@ -358,6 +358,22 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
       localStorage.removeItem(SPY_BASE_KEY);
     }
   };
+const handleSave = async () => {
+  try {
+    const res = await fetch("/api/portfolio", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cash, history }),
+    });
+    if (res.ok) {
+      alert("Portfolio saved successfully.");
+    } else {
+      alert("Failed to save portfolio.");
+    }
+  } catch (err) {
+    alert("Error saving portfolio.");
+  }
+};
 
   /* ----------------------------------------------------------- */
   return (
@@ -456,6 +472,15 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
 <button onClick={resetAll} className="bg-red-600 hover:bg-red-700 px-4 py-2 text-white rounded transition-colors duration-200">
   Reset All
 </button>
+          <button
+      onClick={handleSave}
+      className="bg-green-600 px-4 py-2 text-white rounded"
+      title="Save portfolio to server (public view)"
+    >
+      Save Changes
+    </button>
+
+
 
           </>
         )}
