@@ -33,6 +33,7 @@ export type Position = {
   ticker: string;
   qty: number;        // negativo = short
   price: number;      // prezzo di carico (memorizzato auto-fetch)
+  leverage?: number;
   note?: string;
   date: string;       // yyyy-mm-dd
 };
@@ -53,6 +54,8 @@ const [sortBy, setSortBy]   = useState<"plPct" | "qty" | null>(null);
 const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 const [filterTicker] = useState<string>("");   // "" = tutti
 const [txFilter, setTxFilter] = useState<string>("");
+const [leverage, setLeverage] = useState<number>(1);
+
 
 // ───────── download CSV helper ─────────
 const downloadCSV = (type: "history" | "positions") => {
@@ -206,9 +209,13 @@ const baseRows = tickers.map(t => {
   const { qty: q, cost } = aggregate[t];
   const cur  = prices[t] ?? 0;
   const avg  = cost / q;
-  const pl   = q * (cur - avg);
-  const plPct = Math.abs(q) > 0 ? (pl / (Math.abs(q) * avg)) * 100 : 0;
-  return { ticker: t, qty: q, avg, current: cur, pl, plPct };
+  const lev = history.find((p) => p.ticker === t)?.leverage ?? 1;
+const leverage =
+  history.find((p) => p.ticker === t && p.date === today)?.leverage ?? 1;
+const pl = qty * (cur - avg) * leverage;
+
+const plPct = (pl / (Math.abs(q) * avg)) * 100;
+  return { ticker: t, qty: q, avg, current: cur, pl, plPct, leverage: lev };
 });
 
 const rows = useMemo(() => {
@@ -231,9 +238,20 @@ const rows = useMemo(() => {
 const insights = useMemo(() => {
   if (!rows.length) return null;
 
-  const sortedByPL = [...rows].sort((a, b) => b.plPct - a.plPct);
+ const sortedByPL = [...rows].sort((a, b) =>
+  Math.abs(b.qty * (b.current - b.avg) * (b.leverage ?? 1)) -
+  Math.abs(a.qty * (a.current - a.avg) * (a.leverage ?? 1))
+);
+
   
-  const sortedByImpact = [...rows].sort((a, b) => Math.abs(b.pl) - Math.abs(a.pl));
+  const sortedByImpact = [...rows].sort((a, b) =>
+  Math.abs(b.pl * (b.leverage ?? 1)) - Math.abs(a.pl * (a.leverage ?? 1))
+);
+
+//const sortedByValue = [...rows].sort((a, b) =>
+  //Math.abs(b.qty * b.current * (b.leverage ?? 1)) -
+  //Math.abs(a.qty * a.current * (a.leverage ?? 1))
+//);
 
   return {
     topGainer: sortedByPL[0],
@@ -332,6 +350,7 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
         price: purchasePrice,
         note,
         date: today,
+        leverage,
       },
     ]);
 
@@ -556,7 +575,14 @@ const handleSave = async () => {
       <td className={r.plPct >= 0 ? "text-green-600" : "text-red-600"}>
         {r.plPct.toFixed(2)} %
       </td>
-      <td>{history.find((p) => p.ticker === r.ticker)?.note ?? ""}</td>
+      <td>
+  {history.find((p) => p.ticker === r.ticker)?.note || "—"}
+  <br />
+  <span className="text-xs text-gray-500 italic">
+    Leverage: {history.find((p) => p.ticker === r.ticker)?.leverage ?? "—"}×
+  </span>
+</td>
+
     </tr>
   ))}
 </tbody>
@@ -611,6 +637,18 @@ const handleSave = async () => {
   </select>
 </div>
 
+<select
+  className="border p-2 rounded w-24"
+  value={leverage}
+  onChange={(e) => setLeverage(Number(e.target.value))}
+  title="Multiplier for exposure (e.g. 2x = double gains/losses)"
+>
+  {[1, 2, 3, 4].map((x) => (
+    <option key={x} value={x}>{x}x</option>
+  ))}
+</select>
+
+
       {/* transaction log --------------------------------------- */}
 <h2 className="font-semibold mt-12 mb-2">Transaction Log</h2>
 <table className="w-full text-sm border-collapse">
@@ -620,7 +658,8 @@ const handleSave = async () => {
       <th>Ticker</th>
       <th>Qty</th>
       <th>Price</th>
-      <th>Note</th>
+      <th>Note / Leverage</th>
+
     </tr>
   </thead>
 
@@ -634,7 +673,14 @@ const handleSave = async () => {
       <td>{tx.ticker}</td>
       <td className={tx.qty < 0 ? "text-red-600" : ""}>{tx.qty}</td>
       <td>{tx.price.toFixed(2)} €</td>
-      <td>{tx.note || "—"}</td>
+      <td>
+  {tx.note || "—"}
+  <br />
+  <span className="text-xs text-gray-500 italic">
+    Leverage: {tx.leverage ?? "—"}×
+  </span>
+</td>
+
     </tr>
   ))
 }
@@ -649,7 +695,8 @@ const handleSave = async () => {
       <ResponsiveContainer width="100%" height={250}>
         <PieChart>
           <Pie
-            data={rows.map((r) => ({ ticker: r.ticker, value: Math.abs(r.qty) * r.current }))}
+            data={rows.map((r) => ({ ticker: r.ticker, value: Math.abs(r.qty) * r.current * (r.leverage ?? 1)
+}))}
             dataKey="value"
             nameKey="ticker"
             isAnimationActive={false}
