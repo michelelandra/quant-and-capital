@@ -2,6 +2,8 @@ import { promises as fs } from "fs";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+
 const FILE_PATH = path.join(process.cwd(), "data", "portfolio.json");
 
 

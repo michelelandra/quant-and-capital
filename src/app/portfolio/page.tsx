@@ -7,6 +7,8 @@ import {
 import React, { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import { v4 as uuidv4 } from "uuid";
+import { supabase } from "../../../lib/supabase";
+
 
 /* ------------------------------------------------------------- */
 /* 👇 visibilità editor solo per l’autore                         */
@@ -55,6 +57,11 @@ const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 const [filterTicker] = useState<string>("");   // "" = tutti
 const [txFilter, setTxFilter] = useState<string>("");
 const [leverage, setLeverage] = useState<number>(1);
+const [mounted, setMounted] = useState(false);
+
+useEffect(() => {
+  setMounted(true);
+}, []);
 
 
 // ───────── download CSV helper ─────────
@@ -118,27 +125,73 @@ const toggleSort = (field: "plPct" | "qty") => {
 useEffect(() => {
   // 1) Visitatori (canEdit === false) → legge dal file JSON via API
   if (!canEdit) {
-    fetch("/api/portfolio")
-      .then(res => res.json())
-      .then(({ cash: c, history: h }) => {
-        setCash(c);
-        setHistory(h);
-      })
-      .catch(() => {
-        /* fallback: lascia stato vuoto se la fetch fallisce */
-      });
-    return;                 // ⬅️  Stop qui per chi non può editare
-  }
+  const fetchPublicData = async () => {
+    const { data: cashRow } = await supabase
+      .from("portfolio_cash")
+      .select("amount")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .single();
 
-  // 2) Tu (canEdit === true) → continui con localStorage
+    const { data: historyRows } = await supabase
+      .from("portfolio_history")
+      .select("*");
+
+    setCash(cashRow?.amount ?? INITIAL_CASH);
+    setHistory(historyRows ?? []);
+  };
+
+  fetchPublicData();
+  return;
+}
+
+  // 2) Tu (canEdit === true)
+(async () => {
   if (typeof window === "undefined") return;
+
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
     const { cash: c, history: h } = JSON.parse(saved);
     setCash(c);
     setHistory(h);
+    return;
   }
+
+  // altrimenti fetch dal file
+  try {
+    const res = await fetch("/api/portfolio");
+    const { cash: c, history: h } = await res.json();
+    setCash(c);
+    setHistory(h);
+  } catch (err) {
+    console.error("⚠️ Failed to load portfolio:", err);
+  }
+})();
+
 }, []);
+// Salva automaticamente ogni modifica su localStorage
+useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ cash, history }));
+
+  // Salva anche su file .json se sei autorizzato
+  if (canEdit) {
+    fetch("/api/portfolio", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cash, history }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Save failed");
+        return res.json();
+      })
+      .then(() => console.log("✔️ Portfolio saved"))
+      .catch((err) => console.error("❌ Save failed:", err));
+  }
+}, [cash, history]);
+
+
 
 
   /* --------- persistenza ------------------------------------ */
@@ -151,15 +204,25 @@ useEffect(() => {
 
 /* --------- salva sul file JSON pubblico ------------------- */
 useEffect(() => {
-  if (!canEdit) return;                  // i visitatori non postano nulla
+  if (!canEdit) return;
+
   fetch("/api/portfolio", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cash, history }),
-  }).catch(() => {
-    // opzionale: mostrare errore o log
-  });
+  })
+    .then((res) => {
+      if (res.ok) {
+        console.log("✅ Portfolio saved.");
+      } else {
+        alert("❌ Error saving portfolio (server responded with error).");
+      }
+    })
+    .catch(() => {
+      alert("❌ Network error while saving portfolio.");
+    });
 }, [cash, history]);
+
 
 
   /* --------- aggregati -------------------------------------- */
@@ -321,44 +384,61 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
 
   /* --------- handler Add ------------------------------------ */
   const handleAdd = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!ticker || !qty) return;
+  e.preventDefault();
+  if (!ticker || !qty) return;
 
-    const symbol = ticker.toUpperCase();
-    const priceMap = await fetchPrices([symbol]);
-    const purchasePrice = priceMap[symbol];
+  const symbol = ticker.toUpperCase();
+  const priceMap = await fetchPrices([symbol]);
+  const purchasePrice = priceMap[symbol];
 
-    if (!purchasePrice) {
-      alert("Price unavailable – ticker not supported or API error");
-      return;
-    }
+  if (!purchasePrice) {
+    alert("Price unavailable – ticker not supported or API error");
+    return;
+  }
 
-    const cost = Math.abs(qty) * purchasePrice;
+  const cost = Math.abs(qty) * purchasePrice;
+  const isBuy = qty > 0;
+  const newCash = isBuy ? cash - cost : cash + cost;
 
-    if (qty > 0 && cost > cash) {
-      alert("Not enough cash");
-      return;
-    }
+  if (isBuy && cost > cash) {
+    alert("Not enough cash");
+    return;
+  }
 
-    setCash((c) => c + (qty < 0 ? cost : -cost));
-    setHistory((h) => [
-      ...h,
-      {
-        id: uuidv4(),
-        ticker: symbol,
-        qty,
-        price: purchasePrice,
-        note,
-        date: today,
-        leverage,
-      },
-    ]);
-
-    // reset form
-    setTicker("");
-    setQty(0);
-    setNote("");
+  const newOperation = {
+    id: uuidv4(),
+    ticker: symbol,
+    qty,
+    price: purchasePrice,
+    note,
+    date: today,
+    leverage,
   };
+
+  if (canEdit) {
+    const { error: historyError } = await supabase.from("portfolio_history").insert([newOperation]);
+
+    const { error: cashError } = await supabase
+      .from("portfolio_cash")
+      .upsert([{ amount: newCash, updated_at: new Date().toISOString() }]);
+
+    if (historyError || cashError) {
+      alert("❌ Failed to save to Supabase.");
+      console.error("Supabase error", { historyError, cashError });
+      return;
+    }
+  }
+
+  // aggiorna stato locale solo dopo Supabase ok
+  setHistory((h) => [...h, newOperation]);
+  setCash(newCash);
+
+  // reset form
+  setTicker("");
+  setQty(0);
+  setNote("");
+};
+
 
   /* --------- reset helpers ---------------------------------- */
   const resetDay = () => {
@@ -373,6 +453,22 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
   const resetAll = () => {
   setHistory([]);
   setCash(INITIAL_CASH);
+if (canEdit) {
+  (async () => {
+    const { error: cashError } = await supabase.from("portfolio_cash").insert([{
+      amount: INITIAL_CASH,
+      updated_at: new Date().toISOString(),
+    }]);
+
+    const { error: historyError } = await supabase.from("portfolio_history").delete().neq("id", "");
+
+    if (cashError || historyError) {
+      alert("❌ Failed to reset Supabase data.");
+      console.error("Supabase error", { cashError, historyError });
+    }
+  })();
+}
+
 
   if (typeof window !== "undefined") {
     localStorage.removeItem(HISTORY_KEY);
@@ -408,6 +504,7 @@ const handleSave = async () => {
 }
 
 };
+if (!mounted) return null;
 
   /* ----------------------------------------------------------- */
   return (
