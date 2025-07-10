@@ -52,6 +52,7 @@ export default function PortfolioPage() {
 const [sortBy, setSortBy]   = useState<"plPct" | "qty" | null>(null);
 const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 const [filterTicker] = useState<string>("");   // "" = tutti
+const [txFilter, setTxFilter] = useState<string>("");
 
 // ───────── download CSV helper ─────────
 const downloadCSV = (type: "history" | "positions") => {
@@ -594,6 +595,21 @@ const handleSave = async () => {
   </div>
 )}
 
+<div className="flex items-center gap-2 text-sm mb-2">
+  <label className="font-semibold">Filter by ticker:</label>
+  <select
+    className="border p-1 rounded"
+    value={txFilter}
+    onChange={(e) => setTxFilter(e.target.value)}
+  >
+    <option value="">All</option>
+    {tickers.map((t) => (
+      <option key={t} value={t}>
+        {t}
+      </option>
+    ))}
+  </select>
+</div>
 
       {/* transaction log --------------------------------------- */}
 <h2 className="font-semibold mt-12 mb-2">Transaction Log</h2>
@@ -610,18 +626,18 @@ const handleSave = async () => {
 
   <tbody>
   {[...history]
-    .sort((a, b) => b.date.localeCompare(a.date))   // più recente in alto
-    .map((tx) => (
-      <tr key={tx.id} className="border-b">
-        <td>{tx.date}</td>
-        <td>{tx.ticker}</td>
-        <td className={tx.qty < 0 ? "text-red-600" : ""}>
-          {tx.qty}
-        </td>
-        <td>{tx.price.toFixed(2)} €</td>
-        <td>{tx.note || "—"}</td>
-      </tr>
-  ))}
+  .filter((tx) => !txFilter || tx.ticker === txFilter)
+  .sort((a, b) => b.date.localeCompare(a.date))
+  .map((tx) => (
+    <tr key={tx.id}>
+      <td>{tx.date}</td>
+      <td>{tx.ticker}</td>
+      <td className={tx.qty < 0 ? "text-red-600" : ""}>{tx.qty}</td>
+      <td>{tx.price.toFixed(2)} €</td>
+      <td>{tx.note || "—"}</td>
+    </tr>
+  ))
+}
 </tbody>
 
 
