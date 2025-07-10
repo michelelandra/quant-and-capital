@@ -684,11 +684,41 @@ const handleSave = async () => {
           </LineChart>
         </ResponsiveContainer>
       </div>
+      <h3 className="font-semibold mt-6 mb-2">Equity Daily Log</h3>
+<div className="overflow-x-auto rounded border border-gray-200 shadow-sm bg-white">
+  <table className="min-w-[400px] text-sm w-full text-left">
+    <thead className="bg-gray-100 border-b">
+      <tr>
+        <th className="px-3 py-2">Date</th>
+        <th className="px-3 py-2">Portfolio (%)</th>
+        <th className="px-3 py-2">S&P 500 (%)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {equityHistory.map((entry) => (
+        <tr key={entry.date} className="border-b">
+          <td className="px-3 py-1">{entry.date}</td>
+          <td className={`px-3 py-1 ${entry.port >= 0 ? "text-green-600" : "text-red-600"}`}>
+            {entry.port.toFixed(2)}%
+          </td>
+          <td className={`px-3 py-1 ${entry.sp >= 0 ? "text-green-600" : "text-red-600"}`}>
+            {entry.sp.toFixed(2)}%
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+
 
       <div className="text-right font-bold text-lg">
         Equity {equity.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
         {" "}– Total P/L {rows.reduce((s, r) => s + r.pl, 0).toFixed(2)} €
       </div>
+      {/* Disclaimer */}
+<p className="text-xs text-gray-500 mt-8 italic">
+  This is a simulated portfolio created for educational purposes only. It does not represent real investment advice or financial recommendations. Performance and positions shown are hypothetical and may not reflect real market conditions or risks.
+</p>
     </main>
   );
 }

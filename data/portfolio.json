@@ -1,10 +1,10 @@
 {
-  "cash": 9788.86,
+  "cash": 9577.72,
   "history": [
     {
-      "id": "e9b786be-6ca0-4340-b790-271094cbbefe",
+      "id": "abf3965b-bb5c-445c-922f-f93fc2dcf65a",
       "ticker": "AAPL",
-      "qty": 1,
+      "qty": 2,
       "price": 211.14,
       "note": "",
       "date": "2025-07-10"
