@@ -416,28 +416,39 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
   };
 
   if (canEdit) {
-    const { error: historyError } = await supabase.from("portfolio_history").insert([newOperation]);
+    const res = await fetch("/api/add-operation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newOperation),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      alert("❌ Failed to save to Supabase: " + data.error);
+      console.error("Supabase insert failed", data.error);
+      return;
+    }
 
     const { error: cashError } = await supabase
       .from("portfolio_cash")
       .upsert([{ amount: newCash, updated_at: new Date().toISOString() }]);
 
-    if (historyError || cashError) {
-      alert("❌ Failed to save to Supabase.");
-      console.error("Supabase error", { historyError, cashError });
+    if (cashError) {
+      alert("❌ Failed to update cash.");
+      console.error("Supabase cash update failed", cashError.message);
       return;
     }
   }
 
-  // aggiorna stato locale solo dopo Supabase ok
+  // ✅ aggiorna stato locale
   setHistory((h) => [...h, newOperation]);
   setCash(newCash);
-
-  // reset form
   setTicker("");
   setQty(0);
   setNote("");
 };
+
+
 
 
   /* --------- reset helpers ---------------------------------- */
