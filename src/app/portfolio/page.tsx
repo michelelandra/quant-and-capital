@@ -169,40 +169,38 @@ useEffect(() => {
     console.error("⚠️ Failed to load portfolio:", err);
   }
 })();
-
 }, []);
-// Salva automaticamente ogni modifica su localStorage
+
+    /* --------- persistenza ------------------------------------ */
 useEffect(() => {
-  if (typeof window === "undefined") return;
+  if (!canEdit) return;
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ cash, history }));
+  const saveToSupabase = async () => {
+    try {
+      const { error: cashError } = await supabase
+        .from("portfolio_cash")
+        .upsert([{ amount: cash, updated_at: new Date().toISOString() }]);
 
-  // Salva anche su file .json se sei autorizzato
-  if (canEdit) {
-    fetch("/api/portfolio", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cash, history }),
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Save failed");
-        return res.json();
-      })
-      .then(() => console.log("✔️ Portfolio saved"))
-      .catch((err) => console.error("❌ Save failed:", err));
-  }
+      if (cashError) throw new Error(cashError.message);
+
+      for (const h of history) {
+  const { error: insertError } = await supabase
+    .from("portfolio_history")
+    .upsert([h]);
+
+  if (insertError) throw new Error(insertError.message);
+}
+
+
+      console.log("✅ Saved to Supabase");
+    } catch (err) {
+      console.error("❌ Supabase save failed:", err);
+    }
+  };
+
+  saveToSupabase();
 }, [cash, history]);
 
-
-
-
-  /* --------- persistenza ------------------------------------ */
-useEffect(() => {
-  if (!canEdit) return;  // ⬅️ solo tu puoi salvare su localStorage
-  if (typeof window === "undefined") return;
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ cash, history }));
-}, [cash, history]);
 
 /* --------- salva sul file JSON pubblico ------------------- */
 useEffect(() => {
@@ -387,6 +385,7 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
   /* --------- handler Add ------------------------------------ */
   const handleAdd = async (e: FormEvent) => {
   e.preventDefault();
+  if (!canEdit) return; // ⛔ blocca i visitatori
   if (!ticker || !qty) return;
 
   const symbol = ticker.toUpperCase();
@@ -455,6 +454,7 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
 
   /* --------- reset helpers ---------------------------------- */
   const resetDay = () => {
+    if (!canEdit) return; // ⛔ blocca i visitatori
     const keep = history.filter((p) => p.date !== today);
     const refund = history
       .filter((p) => p.date === today)
@@ -464,6 +464,7 @@ const portPct = ((equity / INITIAL_CASH) - 1) * 100;
   };
 
   const resetAll = () => {
+    if (!canEdit) return; // ⛔ blocca i visitatori
   setHistory([]);
   setCash(INITIAL_CASH);
 if (canEdit) {
@@ -501,6 +502,7 @@ if (canEdit) {
 };
 
 const handleSave = async () => {
+  if (!canEdit) return; // ⛔ blocca i visitatori
   try {
     const res = await fetch("/api/portfolio", {
       method: "POST",
@@ -576,8 +578,6 @@ if (!mounted) return null;
   ))}
 </datalist>
 
-
-
           <input
             type="number"
             className="border p-2 w-24"
@@ -607,31 +607,34 @@ if (!mounted) return null;
 
       {/* controlli -------------------------------------------- */}
       <div className="flex items-center gap-2">
-        {canEdit && (
-          <>
-            <button onClick={resetDay} className="bg-yellow-500 hover:bg-yellow-600 px-4 py-2 text-white rounded transition-colors duration-200">
-  Reset Day
-</button>
+  {canEdit && (
+    <>
+      <button
+        onClick={resetDay}
+        className="bg-yellow-500 hover:bg-yellow-600 px-4 py-2 text-white rounded transition-colors"
+      >
+        Reset Day
+      </button>
+      <button
+        onClick={resetAll}
+        className="bg-red-600 hover:bg-red-700 px-4 py-2 text-white rounded transition-colors duration-200"
+      >
+        Reset All
+      </button>
+      <button
+        onClick={handleSave}
+        className="bg-green-600 px-4 py-2 text-white rounded"
+        title="Save portfolio to server (public view)"
+      >
+        Save Changes
+      </button>
+    </>
+  )}
+  <span className="ml-auto font-semibold">
+    Cash: {cash.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
+  </span>
+</div>
 
-<button onClick={resetAll} className="bg-red-600 hover:bg-red-700 px-4 py-2 text-white rounded transition-colors duration-200">
-  Reset All
-</button>
-          <button
-      onClick={handleSave}
-      className="bg-green-600 px-4 py-2 text-white rounded"
-      title="Save portfolio to server (public view)"
-    >
-      Save Changes
-    </button>
-
-
-
-          </>
-        )}
-        <span className="ml-auto font-semibold">
-          Cash: {cash.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
-        </span>
-      </div>
 
 {/* pulsanti export ---------------------------------------- */}
 <div className="flex gap-4 items-center mt-2">
