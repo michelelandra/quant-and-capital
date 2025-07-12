@@ -1,4 +1,15 @@
 {
   "cash": 10000,
-  "history": []
+  "history": [
+    {
+      "id": "0b20fecc-615f-4bc0-a078-2f58cae5ea2b",
+      "ticker": "AAPL",
+      "qty": 1,
+      "price": 211.16,
+      "note": "",
+      "date": "2025-07-12",
+      "leverage": 1,
+      "created_at": "2025-07-12T13:15:58.893976+00:00"
+    }
+  ]
 }

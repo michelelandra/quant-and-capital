@@ -127,7 +127,28 @@ const toggleSort = (field: "plPct" | "qty") => {
 useEffect(() => {
   // 1) Visitatori (canEdit === false) → legge dal file JSON via API
   if (!canEdit) {
-  const fetchPublicData = async () => {
+    const fetchPublicData = async () => {
+      const { data: cashRow } = await supabase
+        .from("portfolio_cash")
+        .select("amount")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      const { data: historyRows } = await supabase
+        .from("portfolio_history")
+        .select("*");
+
+      setCash(cashRow?.amount ?? INITIAL_CASH);
+      setHistory(historyRows ?? []);
+    };
+
+    fetchPublicData();
+    return;
+  }
+
+  // 2) Tu (canEdit === true)
+  (async () => {
     const { data: cashRow } = await supabase
       .from("portfolio_cash")
       .select("amount")
@@ -141,35 +162,9 @@ useEffect(() => {
 
     setCash(cashRow?.amount ?? INITIAL_CASH);
     setHistory(historyRows ?? []);
-  };
-
-  fetchPublicData();
-  return;
-}
-
-  // 2) Tu (canEdit === true)
-(async () => {
-  if (typeof window === "undefined") return;
-
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    const { cash: c, history: h } = JSON.parse(saved);
-    setCash(c);
-    setHistory(h);
-    return;
-  }
-
-  // altrimenti fetch dal file
-  try {
-    const res = await fetch("/api/portfolio");
-    const { cash: c, history: h } = await res.json();
-    setCash(c);
-    setHistory(h);
-  } catch (err) {
-    console.error("⚠️ Failed to load portfolio:", err);
-  }
-})();
+  })();
 }, []);
+
 
     /* --------- persistenza ------------------------------------ */
 useEffect(() => {
@@ -183,13 +178,15 @@ useEffect(() => {
 
       if (cashError) throw new Error(cashError.message);
 
-      for (const h of history) {
+     for (const h of history) {
   const { error: insertError } = await supabase
     .from("portfolio_history")
-    .upsert([h]);
+   .upsert([h as any], { onConflict: "id" });
+
 
   if (insertError) throw new Error(insertError.message);
 }
+
 
 
       console.log("✅ Saved to Supabase");
@@ -474,7 +471,7 @@ if (canEdit) {
       updated_at: new Date().toISOString(),
     }]);
 
-    const { error: historyError } = await supabase.from("portfolio_history").delete().neq("id", "");
+   const { error: historyError } = await supabase.from("portfolio_history").delete().neq("ticker", "___unlikely___");
 
     if (cashError || historyError) {
       alert("❌ Failed to reset Supabase data.");
