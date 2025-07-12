@@ -12,7 +12,7 @@ import { supabase } from "../../../lib/supabase";
 
 /* ------------------------------------------------------------- */
 /* 👇 visibilità editor solo per l’autore                         */
-const canEdit = true; //SOLO TEMPORANEO POI RITORNA const canEdit = process.env.NEXT_PUBLIC_ENABLE_EDIT === "true";
+const canEdit = process.env.NEXT_PUBLIC_ENABLE_EDIT === "true";
 
 
 
