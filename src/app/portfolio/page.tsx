@@ -67,25 +67,37 @@ const portfolioValue = history.reduce((acc, h) => {
   const price = prices[h.ticker] ?? 0;
   return acc + h.qty * price * (h.leverage ?? 1);
 }, 0);
+const [noteSellMap, setNoteSellMap] = useState<Record<string, string>>({});
+const [qtyToSellMap, setQtyToSellMap] = useState<Record<string, number>>({});
+
+
 
 const totalValue = cash + portfolioValue;
 
 const handleSell = async (ticker: string) => {
   const active = history.filter((h) => h.ticker === ticker);
-  if (!active.length) return;
+  const ownedQty = active.reduce((sum, h) => sum + h.qty, 0);
+  const sellQty = qtyToSellMap[ticker] ?? 0;
 
-  const totalQty = active.reduce((sum, h) => sum + h.qty, 0);
-  const avgPrice = active.reduce((sum, h) => sum + h.qty * h.price, 0) / totalQty;
+  if (sellQty <= 0 || sellQty > ownedQty) {
+    alert(`❌ Invalid quantity to sell for ${ticker}`);
+    return;
+  }
+
+  const avgPrice =
+    active.reduce((sum, h) => sum + h.qty * h.price, 0) / ownedQty;
   const leverage = active[0].leverage ?? 1;
   const currentPrice = prices[ticker] ?? avgPrice;
-  const plRealized = (currentPrice - avgPrice) * totalQty * leverage;
-const noteBase = `Sold ${totalQty} ${ticker} at ${currentPrice.toFixed(2)}€ — P/L: ${plRealized.toFixed(2)}€`;
-const fullNote = note ? `${noteBase} | Reason: ${note}` : noteBase;
+
+  const plRealized = (currentPrice - avgPrice) * sellQty * leverage;
+  const noteBase = `Sold ${sellQty} ${ticker} at ${currentPrice.toFixed(2)}€ — P/L: ${plRealized.toFixed(2)}€`;
+  const sellNote = noteSellMap[ticker] || "";
+  const fullNote = sellNote ? `${noteBase} | Reason: ${sellNote}` : noteBase;
 
   const sellOperation: Position = {
     id: uuidv4(),
     ticker,
-    qty: -totalQty,
+    qty: -sellQty,
     price: currentPrice,
     note: fullNote,
     date: today,
@@ -93,12 +105,13 @@ const fullNote = note ? `${noteBase} | Reason: ${note}` : noteBase;
     type: "sell",
   };
 
-  const newCash = cash + Math.abs(totalQty) * avgPrice * leverage;
+  const newCash = cash + sellQty * avgPrice * leverage;
 
   setCash(newCash);
   setHistory((h) => [...h, sellOperation]);
-setNote("");
-
+  setNote("");
+  setNoteSellMap((prev) => ({ ...prev, [ticker]: "" }));
+  setQtyToSellMap((prev) => ({ ...prev, [ticker]: 0 }));
 
   if (canEdit) {
     const { error: cashError } = await supabase
@@ -120,6 +133,7 @@ setNote("");
     }
   }
 };
+
 
 
 
@@ -785,16 +799,45 @@ if (!mounted) return null;
   </span>
 </td>
 {canEdit && (
-  <td>
+  <td className="flex flex-col items-start space-y-1">
+    <input
+      type="number"
+      min={1}
+      max={Math.abs(r.qty)}
+      placeholder="Qty to sell"
+      className="border px-1 py-0.5 text-xs w-full"
+      value={qtyToSellMap[r.ticker] || ""}
+      onChange={(e) =>
+        setQtyToSellMap((prev) => ({
+          ...prev,
+          [r.ticker]: Number(e.target.value),
+        }))
+      }
+    />
+    <input
+      type="text"
+      placeholder="Sell comment"
+      className="border px-1 py-0.5 text-xs w-full"
+      value={noteSellMap[r.ticker] || ""}
+      onChange={(e) =>
+        setNoteSellMap((prev) => ({
+          ...prev,
+          [r.ticker]: e.target.value,
+        }))
+      }
+    />
     <button
       onClick={() => handleSell(r.ticker)}
       className="text-blue-600 hover:underline text-xs"
-      title="Sell entire position"
+      title="Sell selected quantity"
     >
       Sell
     </button>
   </td>
 )}
+
+
+
 
     </tr>
   ))}
