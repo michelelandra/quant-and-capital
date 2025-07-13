@@ -1,14 +1,24 @@
 {
-  "cash": 9788.84,
+  "cash": 10000,
   "history": [
     {
-      "id": "90e25223-aba7-4e65-94d4-2a5898c13e09",
-      "ticker": "AAPL",
+      "id": "4501d57b-cfb5-462d-a3c2-f4bd17e259c3",
+      "ticker": "TSLA",
       "qty": 1,
-      "price": 211.16,
-      "note": "",
+      "price": 313.51,
+      "note": "try_buy",
       "date": "2025-07-13",
       "leverage": 1
+    },
+    {
+      "id": "5bc4cde6-b1fc-471c-a575-719108a25442",
+      "ticker": "TSLA",
+      "qty": -1,
+      "price": 313.51,
+      "note": "Sold 1 TSLA at 313.51€ — P/L: 0.00€",
+      "date": "2025-07-13",
+      "leverage": 1,
+      "type": "sell"
     }
   ]
 }

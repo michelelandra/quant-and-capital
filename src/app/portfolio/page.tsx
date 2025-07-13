@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from "uuid";
 import { supabase } from "../../../lib/supabase";
 
 
+
 /* ------------------------------------------------------------- */
 /* 👇 visibilità editor solo per l’autore                         */
 const canEdit = process.env.NEXT_PUBLIC_ENABLE_EDIT === "true";
@@ -35,12 +36,14 @@ const SUGGESTED_TICKERS = [
 export type Position = {
   id: string;
   ticker: string;
-  qty: number;        // negativo = short
-  price: number;      // prezzo di carico (memorizzato auto-fetch)
+  qty: number;
+  price: number;
   leverage?: number;
   note?: string;
-  date: string;       // yyyy-mm-dd
+  date: string;
+  type?: "buy" | "sell"; // 👈 AGGIUNTO
 };
+
 
 export type HistoryPoint = { date: string; port: number; sp: number };
 
@@ -66,6 +69,59 @@ const portfolioValue = history.reduce((acc, h) => {
 }, 0);
 
 const totalValue = cash + portfolioValue;
+
+const handleSell = async (ticker: string) => {
+  const active = history.filter((h) => h.ticker === ticker);
+  if (!active.length) return;
+
+  const totalQty = active.reduce((sum, h) => sum + h.qty, 0);
+  const avgPrice = active.reduce((sum, h) => sum + h.qty * h.price, 0) / totalQty;
+  const leverage = active[0].leverage ?? 1;
+  const currentPrice = prices[ticker] ?? avgPrice;
+  const plRealized = (currentPrice - avgPrice) * totalQty * leverage;
+const noteBase = `Sold ${totalQty} ${ticker} at ${currentPrice.toFixed(2)}€ — P/L: ${plRealized.toFixed(2)}€`;
+const fullNote = note ? `${noteBase} | Reason: ${note}` : noteBase;
+
+  const sellOperation: Position = {
+    id: uuidv4(),
+    ticker,
+    qty: -totalQty,
+    price: currentPrice,
+    note: fullNote,
+    date: today,
+    leverage,
+    type: "sell",
+  };
+
+  const newCash = cash + Math.abs(totalQty) * avgPrice * leverage;
+
+  setCash(newCash);
+  setHistory((h) => [...h, sellOperation]);
+setNote("");
+
+
+  if (canEdit) {
+    const { error: cashError } = await supabase
+      .from("portfolio_cash")
+      .upsert([{ amount: newCash, updated_at: new Date().toISOString() }]);
+
+    if (cashError) {
+      alert("❌ Failed to update cash.");
+      console.error(cashError.message);
+    }
+
+    const { error: historyError } = await supabase
+      .from("portfolio_history")
+      .insert([sellOperation]);
+
+    if (historyError) {
+      alert("❌ Failed to save sell operation.");
+      console.error(historyError.message);
+    }
+  }
+};
+
+
 
 useEffect(() => {
   setMounted(true);
@@ -524,8 +580,58 @@ const handleSave = async () => {
   console.error("Error saving to file:", err);
 }
 
+const handleSell = async (ticker: string) => {
+  const active = history.filter((h) => h.ticker === ticker);
+  if (!active.length) return;
+
+  const totalQty = active.reduce((sum, h) => sum + h.qty, 0);
+  const avgPrice = active.reduce((sum, h) => sum + h.qty * h.price, 0) / totalQty;
+  const leverage = active[0].leverage ?? 1;
+  const currentPrice = prices[ticker] ?? avgPrice;
+  const note = `Auto-sell of ${totalQty} ${ticker}`;
+
+  const sellOperation: Position = {
+    id: uuidv4(),
+    ticker,
+    qty: -totalQty,
+    price: currentPrice,
+    note,
+    date: today,
+    leverage,
+    type: "sell",
+  };
+
+  const newCash = cash + Math.abs(totalQty) * currentPrice * leverage;
+
+  setCash(newCash);
+  setHistory((h) => [...h, sellOperation]);
+
+  if (canEdit) {
+    const { error: cashError } = await supabase
+      .from("portfolio_cash")
+      .upsert([{ amount: newCash, updated_at: new Date().toISOString() }]);
+
+    if (cashError) {
+      alert("❌ Failed to update cash.");
+      console.error(cashError.message);
+    }
+
+    const { error: historyError } = await supabase
+      .from("portfolio_history")
+      .insert([sellOperation]);
+
+    if (historyError) {
+      alert("❌ Failed to save sell operation.");
+      console.error(historyError.message);
+    }
+  }
+};
+
+
 };
 if (!mounted) return null;
+
+
 
   /* ----------------------------------------------------------- */
   return (
@@ -724,6 +830,17 @@ if (!mounted) return null;
     Leverage: {history.find((p) => p.ticker === r.ticker)?.leverage ?? "—"}×
   </span>
 </td>
+{canEdit && (
+  <td>
+    <button
+      onClick={() => handleSell(r.ticker)}
+      className="text-blue-600 hover:underline text-xs"
+      title="Sell entire position"
+    >
+      Sell
+    </button>
+  </td>
+)}
 
     </tr>
   ))}
@@ -800,35 +917,38 @@ if (!mounted) return null;
       <th>Ticker</th>
       <th>Qty</th>
       <th>Price</th>
+      <th>Type</th>
       <th>Note / Leverage</th>
-
     </tr>
   </thead>
-
   <tbody>
-  {[...history]
-  .filter((tx) => !txFilter || tx.ticker === txFilter)
-  .sort((a, b) => b.date.localeCompare(a.date))
-  .map((tx) => (
-    <tr key={tx.id}>
-      <td>{tx.date}</td>
-      <td>{tx.ticker}</td>
-      <td className={tx.qty < 0 ? "text-red-600" : ""}>{tx.qty}</td>
-      <td>{tx.price.toFixed(2)} €</td>
-      <td>
-  {tx.note || "—"}
-  <br />
-  <span className="text-xs text-gray-500 italic">
-    Leverage: {tx.leverage ?? "—"}×
-  </span>
-</td>
-
-    </tr>
-  ))
-}
-</tbody>
-
-
+    {[...history]
+      .filter((tx) => !txFilter || tx.ticker === txFilter)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((tx) => (
+        <tr
+          key={tx.id}
+          className={tx.type === "sell" ? "bg-red-50 text-red-700" : ""}
+        >
+          <td>{tx.date}</td>
+          <td>{tx.ticker}</td>
+          <td className={tx.qty < 0 ? "text-red-600 font-semibold" : ""}>
+            {tx.qty}
+          </td>
+          <td>{tx.price.toFixed(2)} €</td>
+          <td className="text-xs font-bold uppercase tracking-wider">
+            {tx.type === "sell" ? "SELL" : "BUY"}
+          </td>
+          <td>
+            {tx.note || "—"}
+            <br />
+            <span className="text-xs text-gray-500 italic">
+              Leverage: {tx.leverage ?? "—"}×
+            </span>
+          </td>
+        </tr>
+      ))}
+  </tbody>
 </table>
 
 
