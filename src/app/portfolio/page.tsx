@@ -126,23 +126,39 @@ const toggleSort = (field: "plPct" | "qty") => {
   // -------- caricamento iniziale ------------------------------ */
 useEffect(() => {
   const fetchPortfolio = async () => {
-    const { data: cashRow } = await supabase
-      .from("portfolio_cash")
-      .select("amount")
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .single();
+    if (canEdit) {
+      // 👤 Proprietario: carica direttamente da Supabase
+      const { data: cashRow } = await supabase
+        .from("portfolio_cash")
+        .select("amount")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .single();
 
-    const { data: historyRows } = await supabase
-      .from("portfolio_history")
-      .select("*");
+      const { data: historyRows } = await supabase
+        .from("portfolio_history")
+        .select("*");
 
-    setCash(cashRow?.amount ?? INITIAL_CASH);
-    setHistory(historyRows ?? []);
+      setCash(cashRow?.amount ?? INITIAL_CASH);
+      setHistory(historyRows ?? []);
+    } else {
+      // 👥 Visitatori: carica dai proxy interni (no CORS)
+      const [cashRes, historyRes] = await Promise.all([
+        fetch("/api/safe-cash"),
+        fetch("/api/safe-fetch"),
+      ]);
+
+      const cashData = await cashRes.json();
+      const historyData = await historyRes.json();
+
+      setCash(cashData?.amount ?? INITIAL_CASH);
+      setHistory(historyData ?? []);
+    }
   };
 
   fetchPortfolio();
-}, []);
+}, [canEdit]);
+
 
 
 
