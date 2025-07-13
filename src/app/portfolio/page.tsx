@@ -60,6 +60,12 @@ const [filterTicker] = useState<string>("");   // "" = tutti
 const [txFilter, setTxFilter] = useState<string>("");
 const [leverage, setLeverage] = useState<number>(1);
 const [mounted, setMounted] = useState(false);
+const portfolioValue = history.reduce((acc, h) => {
+  const price = prices[h.ticker] ?? 0;
+  return acc + h.qty * price * (h.leverage ?? 1);
+}, 0);
+
+const totalValue = cash + portfolioValue;
 
 useEffect(() => {
   setMounted(true);
@@ -143,16 +149,22 @@ useEffect(() => {
       setHistory(historyRows ?? []);
     } else {
       // 👥 Visitatori: carica dai proxy interni (no CORS)
-      const [cashRes, historyRes] = await Promise.all([
-        fetch("/api/safe-cash"),
-        fetch("/api/safe-fetch"),
-      ]);
+      const [_, historyRes] = await Promise.all([
+  fetch("/api/safe-cash"), // ignorato, lo calcoliamo noi
+  fetch("/api/safe-fetch"),
+]);
 
-      const cashData = await cashRes.json();
-      const historyData = await historyRes.json();
+const historyData = await historyRes.json();
+setHistory(historyData ?? []);
 
-      setCash(cashData?.amount ?? INITIAL_CASH);
-      setHistory(historyData ?? []);
+const netCashMovement = historyData?.reduce((acc: number, h: any) => {
+  const isSell = h.type === "sell";
+  const delta = Math.abs(h.qty) * h.price * (h.leverage ?? 1);
+  return acc + (isSell ? delta : -delta);
+}, 0) ?? 0;
+
+setCash(INITIAL_CASH + netCashMovement);
+
     }
   };
 
@@ -536,6 +548,31 @@ if (!mounted) return null;
   </p>
 </div>
 
+{/* Portfolio Snapshot ------------------------------------------------ */}
+<div className="text-right text-sm mt-4 mb-6">
+  <div className="text-xl font-bold text-gray-800">
+    Total Portfolio:&nbsp;
+    <span className="text-blue-700">
+      {totalValue.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
+    </span>
+  </div>
+  <div className="text-sm text-gray-600 mt-1">
+    <div>
+      Cash:&nbsp;
+      <span className="font-medium">
+        {cash.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
+      </span>
+    </div>
+    <div>
+      Asset Value:&nbsp;
+      <span className="font-medium">
+        {portfolioValue.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
+      </span>
+    </div>
+  </div>
+</div>
+
+
 
 {/* Realized / Unrealized P/L -------------------------------- */}
 <div className="flex flex-wrap items-center gap-4 text-sm text-gray-700 mb-6 bg-white/80 p-3 rounded-lg shadow-sm border border-gray-200">
@@ -623,9 +660,7 @@ if (!mounted) return null;
       </button>
     </>
   )}
-  <span className="ml-auto font-semibold">
-    Cash: {cash.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
-  </span>
+  
 </div>
 
 
