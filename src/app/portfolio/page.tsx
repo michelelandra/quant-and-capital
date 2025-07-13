@@ -149,7 +149,8 @@ useEffect(() => {
       setHistory(historyRows ?? []);
     } else {
       // 👥 Visitatori: carica dai proxy interni (no CORS)
-      const [_, historyRes] = await Promise.all([
+      const [, historyRes] = await Promise.all([
+
   fetch("/api/safe-cash"), // ignorato, lo calcoliamo noi
   fetch("/api/safe-fetch"),
 ]);
