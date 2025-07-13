@@ -123,32 +123,9 @@ const toggleSort = (field: "plPct" | "qty") => {
 
   const today = dayjs().format("YYYY-MM-DD");
 
-  /* --------- caricamento iniziale ------------------------------ */
+  // -------- caricamento iniziale ------------------------------ */
 useEffect(() => {
-  // 1) Visitatori (canEdit === false) → legge dal file JSON via API
-  if (!canEdit) {
-    const fetchPublicData = async () => {
-      const { data: cashRow } = await supabase
-        .from("portfolio_cash")
-        .select("amount")
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      const { data: historyRows } = await supabase
-        .from("portfolio_history")
-        .select("*");
-
-      setCash(cashRow?.amount ?? INITIAL_CASH);
-      setHistory(historyRows ?? []);
-    };
-
-    fetchPublicData();
-    return;
-  }
-
-  // 2) Tu (canEdit === true)
-  (async () => {
+  const fetchPortfolio = async () => {
     const { data: cashRow } = await supabase
       .from("portfolio_cash")
       .select("amount")
@@ -162,8 +139,11 @@ useEffect(() => {
 
     setCash(cashRow?.amount ?? INITIAL_CASH);
     setHistory(historyRows ?? []);
-  })();
+  };
+
+  fetchPortfolio();
 }, []);
+
 
 
     /* --------- persistenza ------------------------------------ */
