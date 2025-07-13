@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 
 export async function GET() {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/portfolio_cash?select=amount&order=updated_at.desc&limit=1`, {
+  const res = await fetch(`${process.env.SUPABASE_URL}/rest/v1/portfolio_cash?select=amount&order=updated_at.desc&limit=1`, {
     headers: {
-      apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!}`,
+      apikey: process.env.SUPABASE_ANON_KEY!,
+      Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY!}`,
     },
   });
 
@@ -13,5 +13,6 @@ export async function GET() {
   }
 
   const data = await res.json();
-  return NextResponse.json(data[0]); // ritorna il singolo oggetto
+  return NextResponse.json(data[0]);
 }
+
