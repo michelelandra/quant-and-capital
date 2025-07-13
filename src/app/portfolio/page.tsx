@@ -580,52 +580,6 @@ const handleSave = async () => {
   console.error("Error saving to file:", err);
 }
 
-const handleSell = async (ticker: string) => {
-  const active = history.filter((h) => h.ticker === ticker);
-  if (!active.length) return;
-
-  const totalQty = active.reduce((sum, h) => sum + h.qty, 0);
-  const avgPrice = active.reduce((sum, h) => sum + h.qty * h.price, 0) / totalQty;
-  const leverage = active[0].leverage ?? 1;
-  const currentPrice = prices[ticker] ?? avgPrice;
-  const note = `Auto-sell of ${totalQty} ${ticker}`;
-
-  const sellOperation: Position = {
-    id: uuidv4(),
-    ticker,
-    qty: -totalQty,
-    price: currentPrice,
-    note,
-    date: today,
-    leverage,
-    type: "sell",
-  };
-
-  const newCash = cash + Math.abs(totalQty) * currentPrice * leverage;
-
-  setCash(newCash);
-  setHistory((h) => [...h, sellOperation]);
-
-  if (canEdit) {
-    const { error: cashError } = await supabase
-      .from("portfolio_cash")
-      .upsert([{ amount: newCash, updated_at: new Date().toISOString() }]);
-
-    if (cashError) {
-      alert("❌ Failed to update cash.");
-      console.error(cashError.message);
-    }
-
-    const { error: historyError } = await supabase
-      .from("portfolio_history")
-      .insert([sellOperation]);
-
-    if (historyError) {
-      alert("❌ Failed to save sell operation.");
-      console.error(historyError.message);
-    }
-  }
-};
 
 
 };

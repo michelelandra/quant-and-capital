@@ -8,7 +8,9 @@
       "price": 313.51,
       "note": "try_buy",
       "date": "2025-07-13",
-      "leverage": 1
+      "leverage": 1,
+      "created_at": "2025-07-13T13:44:50.178787+00:00",
+      "type": null
     },
     {
       "id": "5bc4cde6-b1fc-471c-a575-719108a25442",
@@ -18,6 +20,7 @@
       "note": "Sold 1 TSLA at 313.51€ — P/L: 0.00€",
       "date": "2025-07-13",
       "leverage": 1,
+      "created_at": "2025-07-13T13:44:57.008785+00:00",
       "type": "sell"
     }
   ]
