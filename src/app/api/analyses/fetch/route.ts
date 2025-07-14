@@ -13,7 +13,7 @@ export async function GET() {
 
   if (error) {
     console.error('Fetch error:', error.message);
-    return new Response(JSON.stringify([]), { status: 500 });
+    return new Response(JSON.stringify([]));
   }
 
   return Response.json(data ?? []);

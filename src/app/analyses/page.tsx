@@ -27,7 +27,8 @@ export default function AnalysesPage() {
   useEffect(() => {
   async function fetchPosts() {
     try {
-      const res = await fetch("/api/safe-analyses");
+      const res = await fetch("/api/analyses/fetch");
+
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setPosts(data || []);
