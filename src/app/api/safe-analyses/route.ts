@@ -1,17 +1,19 @@
-import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export async function GET() {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/analyses?select=*&order=created_at.desc`, {
-    headers: {
-      apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!}`,
-    },
-  });
+  const { data, error } = await supabase
+    .from('analyses')
+    .select('*')
+    .order('created_at', { ascending: false });
 
-  if (!res.ok) {
-    return NextResponse.json({ error: 'Supabase fetch failed' }, { status: res.status });
+  if (error) {
+    console.error('Fetch error:', error.message);
   }
 
-  const data = await res.json();
-  return NextResponse.json(data);
+  return Response.json(data ?? []);
 }

@@ -51,7 +51,7 @@ export default function AnalysesPage() {
 
 
   /* save (solo su Supabase se canEdit) --------- */
-  async function handlePublish(e: FormEvent) {
+    async function handlePublish(e: FormEvent) {
     e.preventDefault();
     if (!title || !body) return;
 
@@ -65,20 +65,29 @@ export default function AnalysesPage() {
 
     const next = [newPost, ...posts];
     setPosts(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); // fallback salvataggio
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); // fallback locale
 
     setTitle('');
     setBody('');
     setMedia('');
 
     if (canEdit) {
-      const { error } = await supabase.from('analyses').insert([newPost]);
-      if (error) console.error('❌ Failed to publish to Supabase:', error.message);
+      const res = await fetch('/api/add-operation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table: 'analyses', row: newPost }),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('❌ Failed to publish to Supabase:', errorText);
+      }
     }
   }
 
+
   /* delete ------------------------------------- */
-  async function handleDelete(id: string) {
+    async function handleDelete(id: string) {
     if (!confirm('Delete this post?')) return;
 
     const next = posts.filter(p => p.id !== id);
@@ -86,8 +95,16 @@ export default function AnalysesPage() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
 
     if (canEdit) {
-      const { error } = await supabase.from('analyses').delete().eq('id', id);
-      if (error) console.error('❌ Failed to delete from Supabase:', error.message);
+      const res = await fetch('/api/add-operation', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table: 'analyses', match: { id } }),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('❌ Failed to delete from Supabase:', errorText);
+      }
     }
   }
 
