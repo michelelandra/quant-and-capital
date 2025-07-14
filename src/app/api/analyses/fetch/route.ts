@@ -7,9 +7,13 @@ const supabase = createClient(
 
 export async function GET() {
   const { data, error } = await supabase
-    .from('analyses')
-    .select('*')
-    .order('created_at', { ascending: false });
+  .from('analyses')
+  .select('*')
+  .order('created_at', { ascending: false });
+
+if (error) {
+  console.error('Fetch error:', error.message);
+}
 
   return Response.json(data ?? []);
 }
