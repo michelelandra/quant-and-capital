@@ -32,24 +32,23 @@ export default function AnalysesPage() {
 
   /* load da Supabase --------------------------- */
   useEffect(() => {
-    async function fetchPosts() {
-      const { data, error } = await supabase
-        .from('analyses')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching analyses:', error.message);
-        // fallback a localStorage solo in locale
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) setPosts(JSON.parse(saved));
-      } else {
-        setPosts(data || []);
-      }
+  async function fetchPosts() {
+    try {
+      const res = await fetch("/api/safe-analyses");
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+      setPosts(data || []);
+    } catch (err) {
+      console.error("❌ Error fetching analyses:", err);
+      // fallback a localStorage solo in locale
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) setPosts(JSON.parse(saved));
     }
+  }
 
-    fetchPosts();
-  }, []);
+  fetchPosts();
+}, []);
+
 
   /* save (solo su Supabase se canEdit) --------- */
   async function handlePublish(e: FormEvent) {
