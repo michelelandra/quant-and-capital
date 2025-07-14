@@ -18,7 +18,7 @@ type Analysis = {
   title: string;
   body: string;
   media?: string;
-  created: string; // ISO date
+  created_at: string; // ISO date
 };
 
 const STORAGE_KEY = 'analyses_posts';
@@ -61,7 +61,7 @@ export default function AnalysesPage() {
       title,
       body,
       media,
-      created: new Date().toISOString(),
+      created_at: new Date().toISOString(),
     };
 
     const next = [newPost, ...posts];
@@ -147,7 +147,7 @@ export default function AnalysesPage() {
 
           <h3 className="text-xl font-semibold">{p.title}</h3>
           <time className="text-xs text-gray-500">
-            {p.created.slice(0, 10)}
+            {p.created_at.slice(0, 10)}
           </time>
 
           <p className="whitespace-pre-line mt-2">{p.body}</p>
