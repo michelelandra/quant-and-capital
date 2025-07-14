@@ -2,6 +2,13 @@
 
 import { useEffect, useState, FormEvent } from 'react';
 import { v4 as uuid } from 'uuid';
+import { createClient } from '@supabase/supabase-js';
+
+/* Supabase client */
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 /* 👇 visibilità editor solo per l’autore  */
 const canEdit = process.env.NEXT_PUBLIC_ENABLE_EDIT === 'true';
@@ -23,38 +30,66 @@ export default function AnalysesPage() {
   const [body, setBody] = useState('');
   const [media, setMedia] = useState('');
 
-  /* load --------------------------------------- */
+  /* load da Supabase --------------------------- */
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) setPosts(JSON.parse(saved));
+    async function fetchPosts() {
+      const { data, error } = await supabase
+        .from('analyses')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching analyses:', error.message);
+        // fallback a localStorage solo in locale
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) setPosts(JSON.parse(saved));
+      } else {
+        setPosts(data || []);
+      }
+    }
+
+    fetchPosts();
   }, []);
 
-  /* save --------------------------------------- */
-  const persist = (data: Analysis[]) =>
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-
-  /* publish ------------------------------------ */
-  function handlePublish(e: FormEvent) {
+  /* save (solo su Supabase se canEdit) --------- */
+  async function handlePublish(e: FormEvent) {
     e.preventDefault();
     if (!title || !body) return;
-    const next: Analysis[] = [
-      { id: uuid(), title, body, media, created: new Date().toISOString() },
-      ...posts,
-    ];
+
+    const newPost: Analysis = {
+      id: uuid(),
+      title,
+      body,
+      media,
+      created: new Date().toISOString(),
+    };
+
+    const next = [newPost, ...posts];
     setPosts(next);
-    persist(next);
-    /* reset form */
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); // fallback salvataggio
+
     setTitle('');
     setBody('');
     setMedia('');
+
+    if (canEdit) {
+      const { error } = await supabase.from('analyses').insert([newPost]);
+      if (error) console.error('❌ Failed to publish to Supabase:', error.message);
+    }
   }
 
   /* delete ------------------------------------- */
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
     if (!confirm('Delete this post?')) return;
+
     const next = posts.filter(p => p.id !== id);
     setPosts(next);
-    persist(next);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+
+    if (canEdit) {
+      const { error } = await supabase.from('analyses').delete().eq('id', id);
+      if (error) console.error('❌ Failed to delete from Supabase:', error.message);
+    }
   }
 
   /* render ------------------------------------- */
@@ -64,34 +99,35 @@ export default function AnalysesPage() {
 
       {/* form: visibile solo se canEdit */}
       {canEdit ? (
-  <form onSubmit={handlePublish} className="space-y-2 border p-4 rounded">
-    <h2 className="font-semibold">New analysis</h2>
-    <input
-      className="border p-2 w-full"
-      placeholder="Title"
-      value={title}
-      onChange={e => setTitle(e.target.value)}
-    />
-    <textarea
-      className="border p-2 w-full h-32"
-      placeholder="Body (markdown or plain text)"
-      value={body}
-      onChange={e => setBody(e.target.value)}
-    />
-    <input
-      className="border p-2 w-full"
-      placeholder="Media URL (optional image / pdf / link)"
-      value={media}
-      onChange={e => setMedia(e.target.value)}
-    />
-    <button className="bg-blue-600 text-white px-4 py-2 rounded">Publish</button>
-  </form>
-) : (
-  <p className="text-sm text-gray-500 italic mb-4">
-    Editing disabled for visitors.
-  </p>
-)}
-
+        <form onSubmit={handlePublish} className="space-y-2 border p-4 rounded">
+          <h2 className="font-semibold">New analysis</h2>
+          <input
+            className="border p-2 w-full"
+            placeholder="Title"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+          />
+          <textarea
+            className="border p-2 w-full h-32"
+            placeholder="Body (markdown or plain text)"
+            value={body}
+            onChange={e => setBody(e.target.value)}
+          />
+          <input
+            className="border p-2 w-full"
+            placeholder="Media URL (optional image / pdf / link)"
+            value={media}
+            onChange={e => setMedia(e.target.value)}
+          />
+          <button className="bg-blue-600 text-white px-4 py-2 rounded">
+            Publish
+          </button>
+        </form>
+      ) : (
+        <p className="text-sm text-gray-500 italic mb-4">
+          Editing disabled for visitors.
+        </p>
+      )}
 
       {/* elenco */}
       {posts.length === 0 && (
@@ -131,4 +167,3 @@ export default function AnalysesPage() {
     </main>
   );
 }
-
