@@ -2,13 +2,6 @@
 
 import { useEffect, useState, FormEvent } from 'react';
 import { v4 as uuid } from 'uuid';
-import { createClient } from '@supabase/supabase-js';
-
-/* Supabase client */
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 /* 👇 visibilità editor solo per l’autore  */
 const canEdit = process.env.NEXT_PUBLIC_ENABLE_EDIT === 'true';
