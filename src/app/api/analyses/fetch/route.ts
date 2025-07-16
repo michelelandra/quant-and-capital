@@ -11,9 +11,11 @@ export async function GET() {
     .select('*')
     .order('created_at', { ascending: false });
 
+  console.log("Fetch result:", { data, error });
+
   if (error) {
-    console.error('Fetch error:', error.message);
-    return new Response(JSON.stringify([]));
+    console.error("Fetch error:", error.message);
+    return new Response(JSON.stringify([]), { status: 500 });
   }
 
   return Response.json(data ?? []);

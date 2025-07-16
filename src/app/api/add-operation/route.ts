@@ -1,39 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
-import axios from "axios";
+import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_ANON_KEY!;
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
+  const { table, row } = await req.json();
 
-    const requiredFields = ["id", "ticker", "qty", "price", "date", "leverage"];
-    for (const field of requiredFields) {
-      if (!body[field] && body[field] !== 0) {
-        return NextResponse.json({ error: `Missing field: ${field}` }, { status: 400 });
-      }
-    }
-
-    const res = await axios.post(
-      `${supabaseUrl}/rest/v1/portfolio_history`,
-      [body],
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          Prefer: "return=representation",
-        },
-      }
-    );
-
-    return NextResponse.json({ success: true, data: res.data });
-  } catch (error: any) {
-    console.error("🔥 Axios Supabase insert error:", error.message || error);
+  if (!table || !row || typeof row !== "object") {
     return NextResponse.json(
-      { error: "Insert failed: " + (error.message || "unknown") },
-      { status: 500 }
+      { error: "Missing table or row" },
+      { status: 400 }
     );
   }
+
+  const { error } = await supabase.from(table).insert([row]);
+
+  if (error) {
+    console.error("Supabase insert error:", error.message);
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  return NextResponse.json({ success: true });
 }
+
+export async function DELETE(req: NextRequest) {
+  const { table, match } = await req.json();
+
+  if (!table || !match) {
+    return NextResponse.json(
+      { error: "Missing table or match condition" },
+      { status: 400 }
+    );
+  }
+
+  const { error } = await supabase.from(table).delete().match(match);
+
+  if (error) {
+    console.error("Supabase delete error:", error.message);
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  return NextResponse.json({ success: true });
+}
+
