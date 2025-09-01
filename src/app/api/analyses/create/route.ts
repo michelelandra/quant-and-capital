@@ -13,17 +13,11 @@ function slugify(s: string) {
 }
 
 async function readJsonBody(req: Request) {
-  // parse robusto: evita il crash di req.json() quando il body non è JSON puro
   const raw = await req.text();
   if (!raw) throw new Error('Empty body');
   try {
     return JSON.parse(raw);
-  } catch (e) {
-    // aiuta in debug: vedi prime 200 chars del body
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('Invalid JSON body (first 200 chars):', raw.slice(0, 200));
-      console.error('Headers:', Object.fromEntries(req.headers));
-    }
+  } catch {
     throw new Error('Invalid JSON');
   }
 }
@@ -42,6 +36,7 @@ export async function POST(req: Request) {
       .eq('slug', slug)
       .maybeSingle();
     if (exErr) throw exErr;
+
     const finalSlug = ex ? `${slug}-${Date.now().toString(36)}` : slug;
 
     const { data, error } = await supabaseService
@@ -51,10 +46,11 @@ export async function POST(req: Request) {
       .single();
 
     if (error) throw error;
+
     return NextResponse.json({ ok: true, post: data });
-  } catch (e: any) {
-    // rispondi SEMPRE JSON, così il client non esplode su r.json()
-    return NextResponse.json({ ok: false, error: e?.message ?? 'Error' }, { status: 400 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error';
+    return NextResponse.json({ ok: false, error: message }, { status: 400 });
   }
 }
 

@@ -3,26 +3,30 @@ import { supabaseService } from '../../../../../lib/supabaseService';
 
 export const runtime = 'nodejs';
 
-// Accetta { id } (preferito) oppure { slug }
+async function readJsonBody(req: Request) {
+  const raw = await req.text();
+  if (!raw) throw new Error('Empty body');
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error('Invalid JSON');
+  }
+}
+
 export async function DELETE(req: Request) {
   try {
-    const raw = await req.text();
-    if (!raw) throw new Error('Empty body');
-    let body: any;
-    try { body = JSON.parse(raw); } catch { throw new Error('Invalid JSON'); }
-
-    const { id, slug } = body || {};
+    const { id, slug } = await readJsonBody(req);
     if (!id && !slug) throw new Error('Provide id or slug');
 
-    let query = supabaseService.from('analyses_posts').delete();
-    if (id) query = query.eq('id', id);
-    else query = query.eq('slug', slug);
+    let q = supabaseService.from('analyses_posts').delete();
+    q = id ? q.eq('id', id) : q.eq('slug', slug);
 
-    const { error } = await query;
+    const { error } = await q;
     if (error) throw error;
 
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? 'Error' }, { status: 400 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error';
+    return NextResponse.json({ ok: false, error: message }, { status: 400 });
   }
 }
