@@ -1,8 +1,16 @@
-import { createClient } from "@supabase/supabase-js";
-console.log("🧪 SUPABASE_URL:", process.env.SUPABASE_URL);
-console.log("🧪 SUPABASE_ANON_KEY:", process.env.SUPABASE_ANON_KEY);
+// lib/supabase-server.ts
+import 'server-only';
+import { createClient } from '@supabase/supabase-js';
+import { installUndiciIPv4 } from './net';
 
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
+installUndiciIPv4(); // <— importantissimo: fa effetto per tutte le route server
 
-export const supabaseServer = createClient(supabaseUrl, supabaseAnonKey);
+export function serverSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  return createClient(url, anon, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+
