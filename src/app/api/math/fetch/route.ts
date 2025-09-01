@@ -1,0 +1,26 @@
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+export const runtime = 'nodejs';
+
+// usa le chiavi pubbliche (solo read) — devono esistere in .env/.vercel
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(url, anon);
+
+export async function GET() {
+  try {
+    const { data, error } = await supabase
+      .from('math_posts')
+      .select('id, title, slug, body_md, is_public, owner, created_at')
+      .eq('is_public', true)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) throw error;
+    return NextResponse.json({ ok: true, posts: data ?? [] });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Error';
+    return NextResponse.json({ ok: false, error: msg }, { status: 400 });
+  }
+}
