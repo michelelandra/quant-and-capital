@@ -1,136 +1,140 @@
 'use client';
 
 import { useEffect, useState, FormEvent } from 'react';
-import { v4 as uuid } from 'uuid';
 
-/* 👇 visibilità editor solo per l’autore  */
+/** Editor visibile solo a te (in base all'env) */
 const canEdit = process.env.NEXT_PUBLIC_ENABLE_EDIT === 'true';
 
-type Analysis = {
+type Post = {
   id: string;
   title: string;
-  body: string;
-  media?: string;
-  created_at: string; // ISO date
+  slug: string;
+  body_md: string;
+  is_public: boolean;
+  owner: string;
+  created_at: string; // ISO
 };
 
-const STORAGE_KEY = 'analyses_posts';
-
 export default function AnalysesPage() {
-  /* stato -------------------------------------- */
-  const [posts, setPosts] = useState<Analysis[]>([]);
+  // ---- state ----
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  // form
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [media, setMedia] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  /* load da Supabase --------------------------- */
+  // ---- load from API (DB) ----
   useEffect(() => {
-  async function fetchPosts() {
-    try {
-      const res = await fetch("/api/analyses/fetch");
+    let alive = true;
 
-      if (!res.ok) throw new Error("Failed to fetch");
-      const data = await res.json();
-      setPosts(data || []);
-    } catch (err) {
-      console.error("❌ Error fetching analyses:", err);
-      // fallback a localStorage solo in locale
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) setPosts(JSON.parse(saved));
+    async function load() {
+      setLoading(true);
+      setErr(null);
+      try {
+        const res = await fetch('/api/analyses/fetch', { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to load posts');
+        const json = await res.json();
+        if (!alive) return;
+        setPosts(Array.isArray(json.posts) ? json.posts : []);
+      } catch (e: any) {
+        if (!alive) return;
+        setErr(e?.message || 'Error loading posts');
+      } finally {
+        if (alive) setLoading(false);
+      }
     }
-  }
 
-  fetchPosts();
-}, []);
+    load();
+    return () => { alive = false; };
+  }, []);
 
-
-  /* save (solo su Supabase se canEdit) --------- */
-    async function handlePublish(e: FormEvent) {
+  // ---- publish ----
+  async function handlePublish(e: FormEvent) {
     e.preventDefault();
-    if (!title || !body) return;
+    if (!canEdit) return alert('Publishing is disabled on this device.');
+    if (!title.trim() || !body.trim()) return;
 
-    const newPost: Analysis = {
-      id: uuid(),
-      title,
-      body,
-      media,
-      created_at: new Date().toISOString(),
-    };
-
-    const next = [newPost, ...posts];
-    setPosts(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); // fallback locale
-
-    setTitle('');
-    setBody('');
-    setMedia('');
-
-    if (canEdit) {
-      const res = await fetch('/api/add-operation', {
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/analyses/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ table: 'analyses', row: newPost }),
+        body: JSON.stringify({
+          title: title.trim(),
+          body_md: body,
+          is_public: true,
+          owner: 'main',
+        }),
       });
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error('❌ Failed to publish to Supabase:', errorText);
-      }
+      const json = await res.json();
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Publish failed');
+
+      // prepend the newly created post returned by the server
+      setPosts((prev) => [json.post as Post, ...prev]);
+      setTitle('');
+      setBody('');
+    } catch (e: any) {
+      alert(e?.message || 'Error while publishing');
+    } finally {
+      setSubmitting(false);
     }
   }
 
-
-  /* delete ------------------------------------- */
-    async function handleDelete(id: string) {
+  // ---- delete ----
+  async function handleDelete(id: string) {
+    if (!canEdit) return;
     if (!confirm('Delete this post?')) return;
 
-    const next = posts.filter(p => p.id !== id);
-    setPosts(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    // ottimismo: rimuovi subito dalla UI
+    setPosts((prev) => prev.filter((p) => p.id !== id));
 
-    if (canEdit) {
-      const res = await fetch('/api/add-operation', {
+    try {
+      const res = await fetch('/api/analyses/delete', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ table: 'analyses', match: { id } }),
+        body: JSON.stringify({ id }),
       });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error('❌ Failed to delete from Supabase:', errorText);
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || 'Delete failed');
       }
+    } catch (e: any) {
+      alert(e?.message || 'Error while deleting');
+      // rollback UI se vuoi:
+      // await refetch() // oppure ricarica la lista
     }
   }
 
-  /* render ------------------------------------- */
+  // ---- render ----
   return (
     <main className="max-w-3xl mx-auto p-6 space-y-8">
       <h1 className="text-3xl font-bold mb-4">Analyses</h1>
 
-      {/* form: visibile solo se canEdit */}
+      {/* form: only for owner */}
       {canEdit ? (
         <form onSubmit={handlePublish} className="space-y-2 border p-4 rounded">
           <h2 className="font-semibold">New analysis</h2>
           <input
-            className="border p-2 w-full"
+            className="border p-2 w-full rounded"
             placeholder="Title"
             value={title}
-            onChange={e => setTitle(e.target.value)}
+            onChange={(e) => setTitle(e.target.value)}
           />
           <textarea
-            className="border p-2 w-full h-32"
-            placeholder="Body (markdown or plain text)"
+            className="border p-2 w-full h-32 rounded"
+            placeholder="Body (Markdown or plain text)"
             value={body}
-            onChange={e => setBody(e.target.value)}
+            onChange={(e) => setBody(e.target.value)}
           />
-          <input
-            className="border p-2 w-full"
-            placeholder="Media URL (optional image / pdf / link)"
-            value={media}
-            onChange={e => setMedia(e.target.value)}
-          />
-          <button className="bg-blue-600 text-white px-4 py-2 rounded">
-            Publish
+          <button
+            className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-60"
+            disabled={submitting}
+          >
+            {submitting ? 'Publishing…' : 'Publish'}
           </button>
         </form>
       ) : (
@@ -139,41 +143,39 @@ export default function AnalysesPage() {
         </p>
       )}
 
-      {/* elenco */}
-      {posts.length === 0 && (
+      {/* list */}
+      {loading && <p className="text-gray-500">Loading…</p>}
+      {err && <p className="text-red-600">{err}</p>}
+      {!loading && !err && posts.length === 0 && (
         <p className="text-gray-500">No analyses yet.</p>
       )}
-      {posts.map(p => (
-        <article key={p.id} className="border p-4 rounded relative mb-4">
-          {/* delete solo se canEdit */}
-          {canEdit && (
-            <button
-              onClick={() => handleDelete(p.id)}
-              className="absolute top-2 right-2 text-sm text-red-600 hover:underline"
-            >
-              🗑️ Delete
-            </button>
-          )}
 
-          <h3 className="text-xl font-semibold">{p.title}</h3>
-          <time className="text-xs text-gray-500">
-            {p.created_at.slice(0, 10)}
-          </time>
+      {!loading &&
+        !err &&
+        posts.map((p) => (
+          <article key={p.id} className="border p-4 rounded mb-4 relative">
+            {/* delete solo per owner */}
+            {canEdit && (
+              <button
+                onClick={() => handleDelete(p.id)}
+                className="absolute top-2 right-2 text-sm text-red-600 hover:underline"
+                title="Delete post"
+              >
+                🗑️ Delete
+              </button>
+            )}
 
-          <p className="whitespace-pre-line mt-2">{p.body}</p>
-
-          {p.media && (
-            <a
-              href={p.media}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block mt-2 text-blue-600 underline"
-            >
-              Media ↗
-            </a>
-          )}
-        </article>
-      ))}
+            <h3 className="text-xl font-semibold">{p.title}</h3>
+            <time className="text-xs text-gray-500 block mb-2">
+              {new Date(p.created_at).toLocaleString()}
+            </time>
+            <p className="whitespace-pre-line mt-2">
+              {p.body_md?.slice(0, 150)}
+              {p.body_md?.length > 150 ? '…' : ''}
+            </p>
+          </article>
+        ))}
     </main>
   );
 }
+

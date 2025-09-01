@@ -1,20 +1,23 @@
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+export const runtime = 'nodejs';
+
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(url, anon);
 
 export async function GET() {
+  // Lettura PUBLIC dalla tabella corretta
   const { data, error } = await supabase
-    .from('analyses')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .from('analyses_posts')
+    .select('id, title, slug, body_md, is_public, owner, created_at')
+    .eq('is_public', true)
+    .order('created_at', { ascending: false })
+    .limit(100);
 
   if (error) {
-    console.error('Fetch error:', error.message);
-    return new Response(JSON.stringify([]), { status: 500 });
+    return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
   }
-
-  return Response.json(data ?? []);
+  return NextResponse.json({ ok: true, posts: data ?? [] });
 }
