@@ -18,6 +18,7 @@ async function readJsonBody(req: Request) {
   try {
     return JSON.parse(raw);
   } catch {
+    // niente variabile catturata → nessun warning ESLint
     throw new Error('Invalid JSON');
   }
 }
@@ -35,7 +36,9 @@ export async function POST(req: Request) {
       .select('id')
       .eq('slug', slug)
       .maybeSingle();
-    if (exErr) throw exErr;
+    if (exErr) {
+      return NextResponse.json({ ok: false, error: exErr.message }, { status: 400 });
+    }
 
     const finalSlug = ex ? `${slug}-${Date.now().toString(36)}` : slug;
 
@@ -44,8 +47,9 @@ export async function POST(req: Request) {
       .insert({ title, body_md, is_public, owner, slug: finalSlug })
       .select()
       .single();
-
-    if (error) throw error;
+    if (error) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    }
 
     return NextResponse.json({ ok: true, post: data });
   } catch (err) {
@@ -53,4 +57,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: message }, { status: 400 });
   }
 }
-
