@@ -1,7 +1,5 @@
-// src/app/api/ping/route.ts
 import { NextResponse } from 'next/server';
 import { lookup } from 'node:dns/promises';
-
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +9,6 @@ export async function GET() {
 
   const out: any = { url, host };
 
-  // 1) ping a Supabase Auth health
   try {
     const r = await fetch(`${url}/auth/v1/health`, { method: 'GET', cache: 'no-store' });
     out.pingAuth = { ok: r.ok, status: r.status };
@@ -19,7 +16,6 @@ export async function GET() {
     out.pingAuth = { ok: false, error: String(e) };
   }
 
-  // 2) DNS lookup del dominio Supabase
   try {
     if (host) {
       const addrs = await lookup(host, { all: true });
@@ -29,7 +25,6 @@ export async function GET() {
     out.dnsError = String(e);
   }
 
-  // 3) Uscita internet generica
   try {
     const g = await fetch('https://www.google.com', { method: 'HEAD', cache: 'no-store' });
     out.google = { ok: g.ok, status: g.status };
@@ -39,3 +34,4 @@ export async function GET() {
 
   return NextResponse.json(out);
 }
+
