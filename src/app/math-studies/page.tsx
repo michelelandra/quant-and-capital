@@ -15,7 +15,8 @@ type Post = {
   body_md: string;
   is_public: boolean;
   owner: string;
-  created_at: string; // ISO
+  created_at: string;     // ISO
+  media_urls?: string[];  // 👈 nuovo
 };
 
 export default function MathStudiesPage() {
@@ -26,12 +27,12 @@ export default function MathStudiesPage() {
   // form
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
-  // stable date formatter (evita mismatch SSR/CSR)
   const fmt = (iso: string) => (iso ? iso.replace('T', ' ').slice(0, 16) : '');
 
-  // load from server (DB)
+  // load
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -48,9 +49,7 @@ export default function MathStudiesPage() {
         if (alive) setLoading(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, []);
 
   // publish
@@ -61,6 +60,18 @@ export default function MathStudiesPage() {
 
     setSubmitting(true);
     try {
+      // 1) upload media (se presenti)
+      let media_urls: string[] = [];
+      if (files.length) {
+        const fd = new FormData();
+        for (const f of files) fd.append('files', f);
+        const up = await fetch('/api/math/upload', { method: 'POST', body: fd });
+        const uj = await up.json();
+        if (!up.ok || !uj?.ok) throw new Error(uj?.error || 'Upload failed');
+        media_urls = uj.urls as string[];
+      }
+
+      // 2) crea il post con gli URL
       const res = await fetch('/api/math/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -69,14 +80,17 @@ export default function MathStudiesPage() {
           body_md: body,
           is_public: true,
           owner: 'main',
+          media_urls,
         }),
       });
       const json = await res.json();
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Publish failed');
 
       setPosts((p) => [json.post as Post, ...p]);
-      setTitle('');
-      setBody('');
+      setTitle(''); setBody(''); setFiles([]);
+      // pulizia input file
+      const el = document.getElementById('math-files') as HTMLInputElement | null;
+      if (el) el.value = '';
     } catch (e: any) {
       alert(e?.message || 'Error while publishing');
     } finally {
@@ -88,20 +102,37 @@ export default function MathStudiesPage() {
   async function handleDelete(id: string) {
     if (!canEdit) return;
     if (!confirm('Delete this note?')) return;
-
-    // ottimistico
     setPosts((p) => p.filter((x) => x.id !== id));
-
     const res = await fetch('/api/math/delete', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     });
     const json = await res.json();
-    if (!res.ok || !json?.ok) {
-      alert(json?.error || 'Delete failed');
-      // (opzionale) potremmo ricaricare la lista qui
-    }
+    if (!res.ok || !json?.ok) alert(json?.error || 'Delete failed');
+  }
+
+  // helper per render media
+  function renderMedia(urls?: string[]) {
+    if (!urls?.length) return null;
+    return (
+      <div className="mt-3 grid grid-cols-1 gap-3">
+        {urls.map((u) => {
+          const lower = u.toLowerCase();
+          if (/\.(mp4|webm|mov)(\?|$)/.test(lower)) {
+            return (
+              <video key={u} controls className="w-full rounded">
+                <source src={u} />
+              </video>
+            );
+          }
+          // default: image
+          return (
+            <img key={u} src={u} alt="" className="max-w-full rounded" />
+          );
+        })}
+      </div>
+    );
   }
 
   return (
@@ -109,7 +140,7 @@ export default function MathStudiesPage() {
       <h1 className="text-3xl font-bold">Math Studies</h1>
 
       {canEdit ? (
-        <form onSubmit={handlePublish} className="border p-4 rounded space-y-2">
+        <form onSubmit={handlePublish} className="border p-4 rounded space-y-3">
           <h2 className="font-semibold">New study</h2>
 
           <input
@@ -126,6 +157,15 @@ export default function MathStudiesPage() {
             onChange={(e) => setBody(e.target.value)}
           />
 
+          <input
+            id="math-files"
+            type="file"
+            multiple
+            accept="image/*,video/*"
+            className="block w-full"
+            onChange={(e) => setFiles(Array.from(e.target.files || []))}
+          />
+
           <button
             className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-60"
             disabled={submitting}
@@ -139,40 +179,34 @@ export default function MathStudiesPage() {
 
       {loading && <p className="text-gray-500">Loading…</p>}
       {err && <p className="text-red-600">{err}</p>}
-      {!loading && !err && posts.length === 0 && (
-        <p className="text-gray-500">No studies yet.</p>
-      )}
+      {!loading && !err && posts.length === 0 && <p className="text-gray-500">No studies yet.</p>}
 
-      {!loading &&
-        !err &&
-        posts.map((p) => (
-          <article key={p.id} className="border p-4 rounded relative mb-4">
-            {canEdit && (
-              <button
-                onClick={() => handleDelete(p.id)}
-                className="absolute top-2 right-2 text-sm text-red-600 hover:underline"
-                title="Delete"
-              >
-                🗑️ Delete
-              </button>
-            )}
+      {!loading && !err && posts.map((p) => (
+        <article key={p.id} className="border p-4 rounded relative mb-4">
+          {canEdit && (
+            <button
+              onClick={() => handleDelete(p.id)}
+              className="absolute top-2 right-2 text-sm text-red-600 hover:underline"
+              title="Delete"
+            >
+              🗑️ Delete
+            </button>
+          )}
+          <header className="mb-2">
+            <h3 className="text-xl font-semibold">{p.title}</h3>
+            <time className="text-xs text-gray-500 block">{fmt(p.created_at)}</time>
+          </header>
 
-            <header className="mb-2">
-              <h3 className="text-xl font-semibold">{p.title}</h3>
-              <time className="text-xs text-gray-500 block">{fmt(p.created_at)}</time>
-            </header>
+          <div className="prose max-w-none [&_p]:mb-2">
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {p.body_md}
+            </ReactMarkdown>
+          </div>
 
-            <div className="prose max-w-none [&_p]:mb-2">
-              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                {p.body_md}
-              </ReactMarkdown>
-            </div>
-          </article>
-        ))}
+          {renderMedia(p.media_urls)}
+        </article>
+      ))}
     </main>
   );
 }
-
-
-
 
