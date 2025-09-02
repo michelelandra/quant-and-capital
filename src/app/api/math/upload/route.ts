@@ -3,12 +3,19 @@ import { getSupabaseService } from '../../../../../lib/supabaseService';
 
 export const runtime = 'nodejs';
 
-const BUCKET = 'math-media';                // nome bucket
+const BUCKET = 'math-media';
 const MAX_FILES = 5;
-const MAX_SIZE = 10 * 1024 * 1024;          // 10 MB per file
+// Tieni 4 MB per stare sotto ai limiti body delle serverless/Vercel
+const MAX_SIZE = 4 * 1024 * 1024;
+
 const ALLOWED = [
-  'image/png','image/jpeg','image/webp','image/gif',
-  'video/mp4','video/webm','video/quicktime'
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
 ];
 
 function sanitize(name: string) {
@@ -17,42 +24,41 @@ function sanitize(name: string) {
 
 export async function POST(req: Request) {
   try {
-    // interruttore di sicurezza
+    // interruttore sicurezza (produce 403 se non vuoi scrivere in prod)
     if (process.env.NODE_ENV === 'production' &&
         process.env.ANALYSES_ALLOW_WRITE !== 'true') {
-      return NextResponse.json({ ok:false, error:'Writes disabled' }, { status: 403 });
+      return NextResponse.json({ ok: false, error: 'Writes disabled' }, { status: 403 });
     }
 
     const form = await req.formData();
-    const files = form.getAll('files') as unknown as File[];
+    const files = form.getAll('files') as File[];
 
     if (!files.length) return NextResponse.json({ ok: true, urls: [] });
     if (files.length > MAX_FILES) throw new Error(`Too many files (max ${MAX_FILES})`);
 
     const supabase = getSupabaseService();
 
-    // crea bucket se non esiste (idempotente)
+    // crea o rende pubblico il bucket (idempotente)
     await supabase.storage.createBucket(BUCKET, { public: true }).catch(() => {});
+    await supabase.storage.updateBucket(BUCKET, { public: true }).catch(() => {});
 
     const urls: string[] = [];
-    for (const f of files) {
-      if (!ALLOWED.includes((f as any).type)) {
-        throw new Error(`Unsupported type: ${(f as any).type}`);
-      }
-      if ((f as any).size > MAX_SIZE) {
-        throw new Error(`File too large: ${(f as any).name}`);
-      }
 
-      const ab = await f.arrayBuffer();
-      const path = `${new Date().toISOString().slice(0,10)}/` +
-                   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-` +
-                   `${sanitize((f as any).name)}`;
+    for (const f of files) {
+      if (!ALLOWED.includes(f.type)) throw new Error(`Unsupported type: ${f.type}`);
+      if (f.size > MAX_SIZE) throw new Error(`File too large: ${f.name}`);
+
+      const ab = await f.arrayBuffer(); // OK in runtime nodejs, niente Buffer necessario
+
+      const path =
+        `${new Date().toISOString().slice(0, 10)}/` +
+        `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-` +
+        `${sanitize(f.name)}`;
 
       const { data, error } = await supabase
         .storage
         .from(BUCKET)
-        // @ts-ignore - Buffer disponibile in runtime node
-        .upload(path, Buffer.from(ab), { contentType: (f as any).type, upsert: false });
+        .upload(path, ab, { contentType: f.type, upsert: false });
 
       if (error) throw error;
 
@@ -63,6 +69,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, urls });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error';
-    return NextResponse.json({ ok:false, error: message }, { status: 400 });
+    return NextResponse.json({ ok: false, error: message }, { status: 400 });
   }
 }
