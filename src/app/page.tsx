@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Instagram, Linkedin, BarChart3, Brain, Calculator, Settings } from "lucide-react";
 import Image from "next/image";
+import Comments from "@/app/math-studies/components/Comments"; // 👈 aggiunto
 
 // Tailwind colour for brand accent
 const accent = "#8b1d1d";
@@ -80,9 +81,7 @@ export default function HomePage() {
       </header>
 
       {/* About Me */}
-      <details
-        className="mb-12 border border-gray-200 rounded-xl backdrop-blur-sm bg-white/60 shadow-sm overflow-hidden"
-      >
+      <details className="mb-12 border border-gray-200 rounded-xl backdrop-blur-sm bg-white/60 shadow-sm overflow-hidden">
         <summary className="cursor-pointer px-4 py-3 font-semibold select-none text-lg">
           About Me
         </summary>
@@ -124,11 +123,19 @@ export default function HomePage() {
         ))}
       </section>
 
+      {/* 👇 TEST: sezione commenti visibile in home (usa un postId REALE) */}
+      <section className="mt-12">
+        <h2 className="text-xl font-semibold mb-2">Test Commenti</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Se vedi il form qui sotto, le API e il client funzionano correttamente.
+        </p>
+        <Comments postId="2991dd8d-61bf-4c13-9bee-e793e3caeeab" />
+        {/* TODO: quando hai finito i test, puoi rimuovere questo blocco */}
+      </section>
+
       {/* Footer */}
       <footer className="mt-16 text-center text-sm text-gray-500">
-        <p>
-          © {new Date().getFullYear()} Quant &amp; Capital — Michele Landra
-        </p>
+        <p>© {new Date().getFullYear()} Quant &amp; Capital — Michele Landra</p>
         <div className="flex justify-center gap-6 mt-4">
           <a
             href="https://www.instagram.com/yourprofile"
@@ -151,5 +158,4 @@ export default function HomePage() {
     </motion.div>
   );
 }
-
 
