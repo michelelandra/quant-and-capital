@@ -1,12 +1,7 @@
 {
   "compilerOptions": {
-    /* ------------------ impostazioni esistenti ------------------ */
     "target": "ES2017",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -19,36 +14,12 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-    
-    /* ------------------ plugin Next.js -------------------------- */
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    /* ------------------ ALIAS @/ ------------------------------- */
-    "baseUrl": ".", // indica la root del progetto
+    "plugins": [{ "name": "next" }],
+    "baseUrl": "src",
     "paths": {
-      "@/*": [
-        "src/*"
-      ], // fallback generale (rimane)
-      "@/data/*": [
-        "src/data/*"
-      ],
-      "@/app/*": [
-        "src/app/*"
-      ]
+      "@/*": ["*"]
     }
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    "next-env.d.ts",
-    ".next/types/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
-  
-
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
 }
