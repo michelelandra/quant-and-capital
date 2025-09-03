@@ -1,8 +1,13 @@
 // src/app/api/math-studies/comments/fetch/route.ts
 import { NextResponse } from "next/server";
-import { supabase } from "../../../lib/supabase";
+import { supabase } from "@/lib/supabase";
 
 export const runtime = "nodejs";
+
+export async function GET() {
+  // Debug: se la route esiste risponde {ok:true}
+  return NextResponse.json({ ok: true });
+}
 
 export async function POST(req: Request) {
   try {
