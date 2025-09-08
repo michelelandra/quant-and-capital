@@ -2,15 +2,23 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Instagram, Linkedin, BarChart3, Brain, Calculator, Settings } from "lucide-react";
+import { Instagram, Linkedin, BarChart3, Brain, Calculator, Settings, Activity } from "lucide-react";
 import Image from "next/image";
-// src/app/page.tsx (riga 7)
+// src/app/page.tsx
 import Comments from "./math-studies/components/Comments";
 
 // Tailwind colour for brand accent
 const accent = "#8b1d1d";
 
-const cards = [
+type Card = {
+  href: string;
+  title: string;
+  desc: string;
+  icon: any;
+  badge?: string;
+};
+
+const cards: Card[] = [
   {
     href: "/portfolio",
     title: "Portfolio",
@@ -34,6 +42,14 @@ const cards = [
     title: "Simulator",
     desc: "Try your own portfolio strategies",
     icon: Settings,
+  },
+  // NEW: Trading Arena
+  {
+    href: "/trading-arena",
+    title: "Trading Arena",
+    desc: "Timed trading drills on scripted price paths to train execution under pressure. Work in progress — coming soon.",
+    icon: Activity,
+    badge: "Coming soon",
   },
 ];
 
@@ -105,18 +121,25 @@ export default function HomePage() {
       </details>
 
       {/* Section Cards */}
-      <section className="grid sm:grid-cols-2 gap-6">
-        {cards.map(({ href, title, desc, icon: Icon }) => (
+      <section className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
+        {cards.map(({ href, title, desc, icon: Icon, badge }) => (
           <Link
             key={href}
             href={href}
             className="rounded-xl p-6 border border-gray-200 hover:shadow-lg transition group bg-gray-50"
           >
-            <Icon
-              className="w-8 h-8 mb-4 text-[var(--accent-color)] group-hover:scale-105 transition-transform"
-              style={{ color: accent }}
-            />
-            <h3 className="text-xl font-semibold mb-1 group-hover:underline">
+            <div className="flex items-start justify-between">
+              <Icon
+                className="w-8 h-8 text-[var(--accent-color)] group-hover:scale-105 transition-transform"
+                style={{ color: accent }}
+              />
+              {badge && (
+                <span className="text-[10px] px-2 py-1 rounded-full border bg-white text-gray-600">
+                  {badge}
+                </span>
+              )}
+            </div>
+            <h3 className="text-xl font-semibold mt-3 mb-1 group-hover:underline">
               {title}
             </h3>
             <p className="text-sm text-gray-600">{desc}</p>
