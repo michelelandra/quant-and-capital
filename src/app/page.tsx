@@ -4,7 +4,8 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Instagram, Linkedin, BarChart3, Brain, Calculator, Settings } from "lucide-react";
 import Image from "next/image";
-import Comments from "@/app/math-studies/components/Comments"; // 👈 aggiunto
+// src/app/page.tsx (riga 7)
+import Comments from "./math-studies/components/Comments";
 
 // Tailwind colour for brand accent
 const accent = "#8b1d1d";

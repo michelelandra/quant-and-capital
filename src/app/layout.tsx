@@ -40,6 +40,8 @@ export default function RootLayout({
           <Link href="/analyses"> Analyses</Link>
           <Link href="/math-studies"> Math Studies</Link>
           <Link href="/simulator"> Simulator</Link>
+          <Link href="/trading-arena">Trading Arena</Link>
+
         </header>
         <main className="p-6 max-w-4xl mx-auto">{children}</main>
       </body>

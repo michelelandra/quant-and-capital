@@ -1,212 +1,132 @@
-'use client';
+"use client";
 
-import { useEffect, useState, FormEvent } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
-
-const canEdit = process.env.NEXT_PUBLIC_ENABLE_EDIT === 'true';
+import { useEffect, useState } from "react";
+import Comments from "./components/Comments";
+import MathStudyForm from "./components/MathStudyForm";
+// Se vuoi renderizzare markdown+LaTeX in pagina (non solo preview), scommenta e installa le dipendenze:
+// import ReactMarkdown from "react-markdown";
+// import remarkMath from "remark-math";
+// import rehypeKatex from "rehype-katex";
+// import "katex/dist/katex.min.css";
 
 type Post = {
   id: string;
   title: string;
   slug: string;
   body_md: string;
-  is_public: boolean;
-  owner: string;
-  created_at: string;     // ISO
-  media_urls?: string[];  // 👈 nuovo
+  created_at: string;
+  category?: string;
+  tags?: string;
+  media_urls?: string[];
 };
+
+function renderMedia(url: string) {
+  const u = url.toLowerCase();
+  if (u.endsWith(".png") || u.endsWith(".jpg") || u.endsWith(".jpeg") || u.endsWith(".gif") || u.endsWith(".webp")) {
+    return <img key={url} src={url} alt="" className="max-w-full rounded border" />;
+  }
+  if (u.endsWith(".mp4") || u.endsWith(".webm")) {
+    return <video key={url} src={url} controls className="w-full rounded border" />;
+  }
+  if (u.endsWith(".pdf")) {
+    return (
+      <iframe
+        key={url}
+        src={url}
+        className="w-full h-[480px] rounded border"
+        title="PDF"
+      />
+    );
+  }
+  // fallback (es. YouTube/Vimeo links)
+  return (
+    <a key={url} href={url} target="_blank" className="text-blue-600 underline">
+      {url}
+    </a>
+  );
+}
 
 export default function MathStudiesPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // form
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-
-  const fmt = (iso: string) => (iso ? iso.replace('T', ' ').slice(0, 16) : '');
-
-  // load
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      setLoading(true);
-      setErr(null);
-      try {
-        const res = await fetch('/api/math/fetch', { cache: 'no-store' });
-        if (!res.ok) throw new Error('Failed to load posts');
-        const json = await res.json();
-        if (alive) setPosts(Array.isArray(json.posts) ? json.posts : []);
-      } catch (e: any) {
-        if (alive) setErr(e?.message || 'Error loading posts');
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => { alive = false; };
-  }, []);
-
-  // publish
-  async function handlePublish(e: FormEvent) {
-    e.preventDefault();
-    if (!canEdit) return alert('Publishing disabled here.');
-    if (!title.trim() || !body.trim()) return;
-
-    setSubmitting(true);
+  async function fetchPosts() {
     try {
-      // 1) upload media (se presenti)
-      let media_urls: string[] = [];
-      if (files.length) {
-        const fd = new FormData();
-        for (const f of files) fd.append('files', f);
-        const up = await fetch('/api/math/upload', { method: 'POST', body: fd });
-        const uj = await up.json();
-        if (!up.ok || !uj?.ok) throw new Error(uj?.error || 'Upload failed');
-        media_urls = uj.urls as string[];
-      }
-
-      // 2) crea il post con gli URL
-      const res = await fetch('/api/math/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: title.trim(),
-          body_md: body,
-          is_public: true,
-          owner: 'main',
-          media_urls,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Publish failed');
-
-      setPosts((p) => [json.post as Post, ...p]);
-      setTitle(''); setBody(''); setFiles([]);
-      // pulizia input file
-      const el = document.getElementById('math-files') as HTMLInputElement | null;
-      if (el) el.value = '';
+      const res = await fetch("/api/math-studies/fetch", { cache: "no-store" });
+      const raw = await res.text().then((t) => (t ? JSON.parse(t) : []));
+      if (!res.ok) throw new Error(raw?.error || `HTTP ${res.status}`);
+      const list: Post[] = Array.isArray(raw) ? raw : raw?.data ?? [];
+      if (!Array.isArray(list)) throw new Error("Unexpected response for posts");
+      setPosts(list);
+      setError(null);
     } catch (e: any) {
-      alert(e?.message || 'Error while publishing');
+      console.error(e);
+      setError(e?.message || "Failed to load posts");
+      setPosts([]);
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   }
 
-  // delete
-  async function handleDelete(id: string) {
-    if (!canEdit) return;
-    if (!confirm('Delete this note?')) return;
-    setPosts((p) => p.filter((x) => x.id !== id));
-    const res = await fetch('/api/math/delete', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
-    });
-    const json = await res.json();
-    if (!res.ok || !json?.ok) alert(json?.error || 'Delete failed');
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  function handleCreated(newPost: Post) {
+    // prepend appena pubblicato
+    setPosts((prev) => [newPost, ...prev]);
   }
 
-  // helper per render media
-  function renderMedia(urls?: string[]) {
-    if (!urls?.length) return null;
-    return (
-      <div className="mt-3 grid grid-cols-1 gap-3">
-        {urls.map((u) => {
-          const lower = u.toLowerCase();
-          if (/\.(mp4|webm|mov)(\?|$)/.test(lower)) {
-            return (
-              <video key={u} controls className="w-full rounded">
-                <source src={u} />
-              </video>
-            );
-          }
-          // default: image
-          return (
-            <img key={u} src={u} alt="" className="max-w-full rounded" />
-          );
-        })}
-      </div>
-    );
-  }
+  if (loading) return <p className="p-6">Loading posts…</p>;
+  if (error) return <p className="p-6 text-red-500">Error: {error}</p>;
 
   return (
-    <main className="p-6 max-w-4xl mx-auto space-y-8">
-      <h1 className="text-3xl font-bold">Math Studies</h1>
+    <div className="max-w-3xl mx-auto p-6 space-y-8">
+      <h1 className="text-3xl font-bold mb-2">Math Studies</h1>
 
-      {canEdit ? (
-        <form onSubmit={handlePublish} className="border p-4 rounded space-y-3">
-          <h2 className="font-semibold">New study</h2>
+      {/* Form di pubblicazione */}
+      <MathStudyForm onCreated={handleCreated} />
 
-          <input
-            className="border p-2 w-full rounded"
-            placeholder="Title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-
-          <textarea
-            className="border p-2 w-full h-40 rounded"
-            placeholder="Body (Markdown + inline LaTeX)"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-          />
-
-          <input
-            id="math-files"
-            type="file"
-            multiple
-            accept="image/*,video/*"
-            className="block w-full"
-            onChange={(e) => setFiles(Array.from(e.target.files || []))}
-          />
-
-          <button
-            className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-60"
-            disabled={submitting}
-          >
-            {submitting ? 'Publishing…' : 'Publish'}
-          </button>
-        </form>
-      ) : (
-        <p className="text-sm text-gray-500 italic">Editing disabled for visitors.</p>
+      {posts.length === 0 && (
+        <p className="text-gray-600">No math studies published yet.</p>
       )}
 
-      {loading && <p className="text-gray-500">Loading…</p>}
-      {err && <p className="text-red-600">{err}</p>}
-      {!loading && !err && posts.length === 0 && <p className="text-gray-500">No studies yet.</p>}
-
-      {!loading && !err && posts.map((p) => (
-        <article key={p.id} className="border p-4 rounded relative mb-4">
-          {canEdit && (
-            <button
-              onClick={() => handleDelete(p.id)}
-              className="absolute top-2 right-2 text-sm text-red-600 hover:underline"
-              title="Delete"
-            >
-              🗑️ Delete
-            </button>
-          )}
-          <header className="mb-2">
-            <h3 className="text-xl font-semibold">{p.title}</h3>
-            <time className="text-xs text-gray-500 block">{fmt(p.created_at)}</time>
-          </header>
-
-          <div className="prose max-w-none [&_p]:mb-2">
-            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-              {p.body_md}
-            </ReactMarkdown>
+      {posts.map((post) => (
+        <article
+          key={post.id}
+          className="border rounded-xl p-4 shadow-sm bg-white space-y-3"
+        >
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">{post.title}</h2>
+            {post.category && (
+              <span className="text-xs px-2 py-1 rounded bg-gray-100 border">
+                {post.category}
+              </span>
+            )}
           </div>
+          <p className="text-sm text-gray-500">
+            {new Date(post.created_at).toLocaleDateString()}
+            {post.tags ? ` • ${post.tags}` : ""}
+          </p>
 
-          {renderMedia(p.media_urls)}
+          {/* Corpo: markdown+LaTeX se abiliti le dipendenze */}
+          {/* <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+            {post.body_md}
+          </ReactMarkdown> */}
+          <p className="whitespace-pre-line">{post.body_md}</p>
+
+          {/* Media */}
+          {!!post.media_urls?.length && (
+            <div className="space-y-3">
+              {post.media_urls.map((url) => renderMedia(url))}
+            </div>
+          )}
+
+          {/* Commenti */}
+          {post.id ? <Comments postId={post.id} /> : null}
         </article>
       ))}
-    </main>
+    </div>
   );
 }
-

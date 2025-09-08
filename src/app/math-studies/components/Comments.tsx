@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 type Comment = {
   id: string;
@@ -10,81 +10,67 @@ type Comment = {
   created_at: string;
 };
 
-export default function Comments({
-  postId,
-  className = "",
-}: {
-  postId: string;
-  className?: string;
-}) {
+export default function Comments({ postId }: { postId?: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
+  const [author, setAuthor] = useState("");
+  const [body, setBody] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // form state
-  const [author, setAuthor] = useState("");
-  const [body, setBody] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [hp, setHp] = useState(""); // honeypot anti-bot (DEVE restare vuoto)
-
-  // form validation
-  const bodyTooLong = body.length > 3000;
-  const authorTooLong = author.length > 80;
-  const canSubmit = !submitting && body.trim().length > 0 && !bodyTooLong && !authorTooLong;
-
-  // format time
-  const fmt = (iso: string) =>
-    new Date(iso).toLocaleString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-  // carica commenti
   useEffect(() => {
-    let stop = false;
-    (async () => {
+    // ⛔ Non chiamare l'API se non c'è un postId valido
+    if (!postId) {
+      setComments([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    let cancelled = false;
+    const load = async () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch("/api/math-studies/comments/fetch", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ postId }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "Fetch error");
-        if (!stop) setComments(data as Comment[]);
+        const res = await fetch(
+          `/api/math-studies/comments/fetch?postId=${encodeURIComponent(postId)}`,
+          { cache: "no-store" }
+        );
+        if (!res.ok) {
+          // Provo a leggere JSON, altrimenti testo grezzo
+          let msg = "";
+          try {
+            const j = await res.json();
+            msg = j?.error || `HTTP ${res.status}`;
+          } catch {
+            msg = await res.text();
+          }
+          throw new Error(msg || `HTTP ${res.status}`);
+        }
+        const data: Comment[] = await res.json();
+        if (!cancelled) setComments(data);
       } catch (e: any) {
-        if (!stop) setError(e?.message ?? "Unexpected error");
+        console.error("Comments fetch failed:", e);
+        if (!cancelled) {
+          setComments([]); // non bloccare la pagina
+          setError(e?.message || "Failed to load comments");
+        }
       } finally {
-        if (!stop) setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    })();
+    };
+
+    load();
     return () => {
-      stop = true;
+      cancelled = true;
     };
   }, [postId]);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!canSubmit) return;
-
-    setSubmitting(true);
-    setError(null);
-
-    // optimistic UI
-    const tempId = `temp-${Date.now()}`;
-    const optimistic: Comment = {
-      id: tempId,
-      post_id: postId,
-      author: (author || "Anonymous").trim(),
-      body: body.trim(),
-      created_at: new Date().toISOString(),
-    };
-    setComments((curr) => [...curr, optimistic]);
+  async function addComment() {
+    if (!postId) {
+      alert("Missing postId: impossibile aggiungere il commento.");
+      return;
+    }
+    if (!body.trim()) return;
 
     try {
       const res = await fetch("/api/math-studies/comments/add", {
@@ -94,107 +80,81 @@ export default function Comments({
           postId,
           author: author || "Anonymous",
           body,
-          hp, // honeypot: deve rimanere ""
+          hp: "", // honeypot
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Submit error");
 
-      // sostituisci l'optimistic con quello reale dal server
-      setComments((curr) =>
-        curr.map((c) => (c.id === tempId ? (data as Comment) : c))
-      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+
+      // Aggiungo in coda il nuovo commento
+      setComments((prev) => [...prev, data as Comment]);
       setBody("");
       setAuthor("");
     } catch (e: any) {
-      // annulla optimistic se errore
-      setComments((curr) => curr.filter((c) => c.id !== tempId));
-      setError(e?.message ?? "Unexpected error");
-    } finally {
-      setSubmitting(false);
+      alert(e?.message || "Error adding comment");
     }
   }
 
-  const count = useMemo(() => comments.length, [comments]);
-
   return (
-    <div className={`mt-6 space-y-4 ${className}`}>
-      <h3 className="text-lg font-semibold">Comments ({count})</h3>
+    <div className="mt-6 space-y-4">
+      <h3 className="font-semibold">Comments</h3>
 
-      {/* lista */}
-      <div className="space-y-3">
-        {loading && <p className="text-sm opacity-70">Loading comments…</p>}
-        {error && (
-          <div className="text-sm rounded-md border border-red-300 bg-red-50 p-2">
-            {error}
-          </div>
-        )}
-        {!loading && comments.length === 0 && (
-          <p className="text-sm opacity-70">Be the first to comment.</p>
-        )}
-        {comments.map((c) => (
-          <div
-            key={c.id}
-            className="rounded-2xl border p-3 shadow-sm"
-          >
-            <div className="mb-1 text-xs opacity-70">
-              <span className="font-medium">{c.author}</span> • {fmt(c.created_at)}
-            </div>
-            <p className="whitespace-pre-wrap leading-relaxed">{c.body}</p>
-          </div>
-        ))}
-      </div>
+      {!postId && (
+        <p className="text-sm text-gray-500">
+          No comments available for this item.
+        </p>
+      )}
 
-      {/* form */}
-      <form onSubmit={onSubmit} className="rounded-2xl border p-4 shadow-sm space-y-3">
-        {/* honeypot invisibile per bot */}
-        <input
-          type="text"
-          value={hp}
-          onChange={(e) => setHp(e.target.value)}
-          className="hidden"
-          tabIndex={-1}
-          aria-hidden="true"
-          autoComplete="off"
-        />
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <input
-            className="flex-1 rounded-xl border px-3 py-2"
-            placeholder="Your name (optional)"
-            value={author}
-            onChange={(e) => setAuthor(e.target.value)}
-            maxLength={80}
-          />
-        </div>
-        <div>
-          <textarea
-            className="w-full min-h-[90px] rounded-xl border px-3 py-2"
-            placeholder="Write a comment…"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            maxLength={3000}
-          />
-          <div className="mt-1 flex justify-between text-xs opacity-60">
-            <span>{body.length}/3000</span>
-            {authorTooLong && <span className="text-red-600">Name too long</span>}
-            {bodyTooLong && <span className="text-red-600">Comment too long</span>}
+      {postId && loading && <p className="text-sm">Loading…</p>}
+      {postId && error && (
+        <p className="text-sm text-red-500">Error: {error}</p>
+      )}
+      {postId && comments.length === 0 && !loading && !error && (
+        <p className="text-sm text-gray-500">No comments yet.</p>
+      )}
+
+      {postId && (
+        <>
+          <div className="space-y-2">
+            {comments.map((c) => (
+              <div key={c.id} className="border rounded p-2">
+                <p className="text-sm">
+                  <b>{c.author}</b> •{" "}
+                  {new Date(c.created_at).toLocaleString()}
+                </p>
+                <p>{c.body}</p>
+              </div>
+            ))}
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className={`rounded-xl px-4 py-2 text-white shadow-sm transition ${
-              canSubmit ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-400"
-            }`}
-          >
-            {submitting ? "Posting…" : "Add comment"}
-          </button>
-          <span className="text-xs opacity-60">
-            Please be respectful. No spam.
-          </span>
-        </div>
-      </form>
+
+          <div className="mt-3 flex flex-col gap-2">
+            <input
+              type="text"
+              placeholder="Your name (optional)"
+              value={author}
+              onChange={(e) => setAuthor(e.target.value)}
+              className="border rounded p-1"
+            />
+            <textarea
+              placeholder="Write a comment..."
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              className="border rounded p-1"
+            />
+            <button
+              onClick={addComment}
+              disabled={!body.trim()}
+              className="bg-blue-500 text-white rounded p-1 hover:bg-blue-600 disabled:opacity-50"
+            >
+              Add Comment
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
+
