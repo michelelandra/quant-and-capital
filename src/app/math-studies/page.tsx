@@ -46,10 +46,23 @@ function renderMedia(url: string) {
   );
 }
 
+// flag build-time (client-safe perché NEXT_PUBLIC_)
+const ENABLE_EDIT =
+  String(process.env.NEXT_PUBLIC_ENABLE_EDIT ?? "").toLowerCase() === "true";
+
 export default function MathStudiesPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // attiva modalità admin con #admin nell'URL
+  const [showAdmin, setShowAdmin] = useState(false);
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hash === "#admin") {
+      setShowAdmin(true);
+    }
+  }, []);
+  const canEdit = ENABLE_EDIT || showAdmin;
 
   async function fetchPosts() {
     try {
@@ -85,8 +98,17 @@ export default function MathStudiesPage() {
     <div className="max-w-3xl mx-auto p-6 space-y-8">
       <h1 className="text-3xl font-bold mb-2">Math Studies</h1>
 
-      {/* Form di pubblicazione */}
-      <MathStudyForm onCreated={handleCreated} />
+      {/* Form di pubblicazione: visibile solo se canEdit */}
+      {canEdit && (
+        <section className="mb-8">
+          <MathStudyForm onCreated={handleCreated} />
+          {showAdmin && (
+            <p className="mt-2 text-xs text-gray-500">
+              Admin mode via <code>#admin</code> — publishing requires passphrase.
+            </p>
+          )}
+        </section>
+      )}
 
       {posts.length === 0 && (
         <p className="text-gray-600">No math studies published yet.</p>
