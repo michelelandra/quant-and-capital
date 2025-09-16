@@ -35,14 +35,18 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-white text-black">
         <header className="w-full border-b p-4 flex gap-4 text-sm">
-          <Link href="/"> Home</Link>
-          <Link href="/portfolio"> Portfolio</Link>
-          <Link href="/analyses"> Analyses</Link>
-          <Link href="/math-studies"> Math Studies</Link>
-          <Link href="/simulator"> Simulator</Link>
-          <Link href="/trading-arena">Trading Arena</Link>
+  <Link href="/"> Home</Link>
+  <Link href="/portfolio"> Portfolio</Link>
+  <Link href="/analyses"> Analyses</Link>
+  <Link href="/math-studies"> Math Studies</Link>
+  <Link href="/simulator"> Simulator</Link>
+  <Link href="/trading-arena">Trading Arena</Link>
+  {/* 👇 Aggiungi queste tre nuove voci */}
+  <Link href="/scenarios"> Scenarios</Link>
+  <Link href="/case-studies"> Case Studies</Link>
+  <Link href="/trading-games"> Trading Games</Link>
+</header>
 
-        </header>
         <main className="p-6 max-w-4xl mx-auto">{children}</main>
       </body>
     </html>

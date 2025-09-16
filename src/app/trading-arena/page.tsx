@@ -505,6 +505,8 @@ export default function TradingArenaPage() {
                       className={`py-1 pr-2 ${
                         f.realized >= 0 ? "text-green-700" : "text-red-700"
                       }`}
+                      
+        
                     >
                       {f.realized.toFixed(2)}
                     </td>
