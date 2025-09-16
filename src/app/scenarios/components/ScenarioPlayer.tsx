@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ScenarioData } from "../../../data/scenarios/us-china-trade-war";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 function ValueTooltipLabel({ label, payload }: any) {
   const val = payload?.[0]?.value;
@@ -161,14 +162,31 @@ export default function ScenarioPlayer({ data }: { data: ScenarioData }) {
           <h3 className="mt-1 text-lg font-semibold">Debrief</h3>
           <p className="mt-1 text-zinc-700 dark:text-zinc-300">{data.debrief.text}</p>
           {data.debrief.links && data.debrief.links.length > 0 && (
-            <ul className="mt-3 list-inside list-disc text-sm">
-              {data.debrief.links.map((l) => (
-                <li key={l.href}>
-                  <a href={l.href} className="underline underline-offset-4 hover:no-underline">{l.label}</a>
-                </li>
-              ))}
-            </ul>
+  <ul className="mt-3 list-inside list-disc text-sm">
+    {data.debrief.links.map((l) => {
+      const isExternal = /^https?:\/\//i.test(l.href);
+      return (
+        <li key={l.href}>
+          {isExternal ? (
+            <a
+              href={l.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-4 hover:no-underline"
+            >
+              {l.label}
+            </a>
+          ) : (
+            <Link href={l.href} className="underline underline-offset-4 hover:no-underline">
+              {l.label}
+            </Link>
           )}
+        </li>
+      );
+    })}
+  </ul>
+)}
+
           <div className="mt-4 flex gap-2">
             <button
               onClick={start}
@@ -176,12 +194,13 @@ export default function ScenarioPlayer({ data }: { data: ScenarioData }) {
             >
               Replay
             </button>
-            <a
-              href="/scenarios"
-              className="rounded-lg border px-4 py-2 text-sm hover:bg-black hover:text-white dark:border-zinc-700 dark:hover:bg-white dark:hover:text-black"
-            >
-              Back to Scenarios
-            </a>
+            <Link
+  href="/scenarios"
+  className="rounded-lg border px-4 py-2 text-sm hover:bg-black hover:text-white dark:border-zinc-700 dark:hover:bg-white dark:hover:text-black"
+>
+  Back to Scenarios
+</Link>
+
           </div>
         </motion.div>
       )}
