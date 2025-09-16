@@ -3,7 +3,13 @@ import { notFound } from "next/navigation";
 import ScenarioPlayer from "../components/ScenarioPlayer";
 import { US_CHINA_TRADE_WAR } from "../../../data/scenarios/us-china-trade-war";
 
-export default function ScenarioDetail({ params }: { params: { slug: string } }) {
+// Props type compatible with Next App Router
+type PageProps = {
+  params: { slug: string };
+  searchParams?: { [key: string]: string | string[] | undefined };
+};
+
+export default function ScenarioDetail({ params }: PageProps) {
   const { slug } = params;
 
   if (slug === US_CHINA_TRADE_WAR.slug) {
