@@ -1,5 +1,5 @@
 {
-  "cash": 8495.4,
+  "cash": 10313.51,
   "history": [
     {
       "id": "a41dbdbe-9fc3-4450-8f38-615ecd481f06",
@@ -33,6 +33,16 @@
       "leverage": 1,
       "created_at": "2025-09-08T22:24:57.484571+00:00",
       "type": null
+    },
+    {
+      "id": "ecc9a59f-3a8b-4bea-99bb-32a877411019",
+      "ticker": "TSLA",
+      "qty": -1,
+      "price": 442.79,
+      "note": "Sold 1 TSLA at 442.79€ — P/L: 129.28€",
+      "date": "2025-09-25",
+      "leverage": 1,
+      "type": "sell"
     }
   ]
 }

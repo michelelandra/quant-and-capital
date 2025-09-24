@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { supabase } from "@/lib/supabase";  // usa il tuo client già pronto
 
 type NewPost = {
   title: string;
@@ -19,9 +20,39 @@ export default function MathStudyForm({
   const [body, setBody] = useState("");
   const [category, setCategory] = useState<string>("General");
   const [tags, setTags] = useState<string>("");
-  const [media, setMedia] = useState<string>(""); // una o più URL (una per riga)
+  const [media, setMedia] = useState<string>(""); // URL manuali
+  const [files, setFiles] = useState<File[]>([]); // nuovi file
+  const [uploading, setUploading] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // funzione di upload su Supabase Storage
+  async function uploadFiles(): Promise<string[]> {
+    if (files.length === 0) return [];
+    setUploading(true);
+    const uploaded: string[] = [];
+
+    for (const f of files) {
+      const ext = f.name.split(".").pop();
+      const path = `math-studies/${crypto.randomUUID()}.${ext}`;
+
+      const { error } = await supabase.storage
+        .from("math-media")
+        .upload(path, f, { contentType: f.type });
+
+      if (error) {
+        console.error("Upload error:", error);
+        continue;
+      }
+
+      const { data } = supabase.storage.from("math-media").getPublicUrl(path);
+      if (data?.publicUrl) uploaded.push(data.publicUrl);
+    }
+
+    setUploading(false);
+    return uploaded;
+  }
 
   async function publish() {
     if (!title.trim() || !body.trim()) return;
@@ -30,10 +61,17 @@ export default function MathStudyForm({
     setError(null);
 
     try {
-      const mediaUrls: string[] = media
+      // 1) carica file selezionati
+      const uploadedUrls = await uploadFiles();
+
+      // 2) prendi eventuali URL manuali
+      const manualUrls: string[] = media
         .split(/\n|,/)
         .map((s) => s.trim())
         .filter(Boolean);
+
+      // 3) unisci
+      const mediaUrls: string[] = [...manualUrls, ...uploadedUrls];
 
       const payload: NewPost = {
         title: title.trim(),
@@ -46,19 +84,20 @@ export default function MathStudyForm({
       const res = await fetch("/api/math-studies/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload), // ✅ niente JSX, solo oggetto tipato
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 
       onCreated?.(data);
-      // reset form
+      // reset
       setTitle("");
       setBody("");
       setCategory("General");
       setTags("");
       setMedia("");
+      setFiles([]);
     } catch (e: any) {
       setError(e?.message || "Publish failed");
     } finally {
@@ -104,6 +143,28 @@ export default function MathStudyForm({
         onChange={(e) => setBody(e.target.value)}
       />
 
+      {/* Upload files */}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">
+          Upload files (images, videos, PDFs)
+        </label>
+        <input
+          type="file"
+          multiple
+          accept="image/*,video/*,application/pdf"
+          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+        />
+        {files.length > 0 && (
+          <p className="text-xs text-gray-600">
+            Selected: {files.map((f) => f.name).join(", ")}
+          </p>
+        )}
+        {uploading && (
+          <p className="text-xs text-gray-500">Uploading…</p>
+        )}
+      </div>
+
+      {/* Media URLs manuali */}
       <textarea
         className="border rounded p-2 w-full min-h-[80px]"
         placeholder={"Media URLs (one per line). Images, videos, PDFs or external links"}

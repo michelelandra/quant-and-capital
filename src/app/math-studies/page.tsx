@@ -1,4 +1,5 @@
 "use client";
+import MediaRenderer from "./components/MediaRenderer";
 
 import { useEffect, useState } from "react";
 import Comments from "./components/Comments";
@@ -20,31 +21,7 @@ type Post = {
   media_urls?: string[];
 };
 
-function renderMedia(url: string) {
-  const u = url.toLowerCase();
-  if (u.endsWith(".png") || u.endsWith(".jpg") || u.endsWith(".jpeg") || u.endsWith(".gif") || u.endsWith(".webp")) {
-    return <img key={url} src={url} alt="" className="max-w-full rounded border" />;
-  }
-  if (u.endsWith(".mp4") || u.endsWith(".webm")) {
-    return <video key={url} src={url} controls className="w-full rounded border" />;
-  }
-  if (u.endsWith(".pdf")) {
-    return (
-      <iframe
-        key={url}
-        src={url}
-        className="w-full h-[480px] rounded border"
-        title="PDF"
-      />
-    );
-  }
-  // fallback (es. YouTube/Vimeo links)
-  return (
-    <a key={url} href={url} target="_blank" className="text-blue-600 underline">
-      {url}
-    </a>
-  );
-}
+
 
 // flag build-time (client-safe perché NEXT_PUBLIC_)
 const ENABLE_EDIT =
@@ -138,12 +115,10 @@ export default function MathStudiesPage() {
           </ReactMarkdown> */}
           <p className="whitespace-pre-line">{post.body_md}</p>
 
-          {/* Media */}
-          {!!post.media_urls?.length && (
-            <div className="space-y-3">
-              {post.media_urls.map((url) => renderMedia(url))}
-            </div>
-          )}
+         {/* Media */}
+<div className="space-y-3">
+  <MediaRenderer urls={post.media_urls ?? []} />
+</div>
 
           {/* Commenti */}
           {post.id ? <Comments postId={post.id} /> : null}
