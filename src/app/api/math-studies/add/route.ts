@@ -22,11 +22,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    // ✅ check admin (accetta dal body o da header custom)
-    const passed = json.adminToken || req.headers.get("x-admin-token") || "";
-    if (passed !== process.env.ADMIN_PUBLISH_TOKEN) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    // ✅ check admin (body o header) — logging diagnostico
+const passed = json.adminToken || req.headers.get("x-admin-token") || "";
+const haveEnv = Boolean(process.env.ADMIN_PUBLISH_TOKEN);
+
+if (!haveEnv) {
+  console.error("ADMIN_PUBLISH_TOKEN is MISSING at runtime");
+  return NextResponse.json({ error: "server_misconfig" }, { status: 500 });
+}
+
+if (!passed) {
+  console.error("No admin token provided (body/header)");
+  return NextResponse.json({ error: "missing_token" }, { status: 403 });
+}
+
+if (passed !== process.env.ADMIN_PUBLISH_TOKEN) {
+  console.error("Admin token mismatch");
+  return NextResponse.json({ error: "bad_token" }, { status: 403 });
+}
+
 
     const title = (json.title ?? "").trim();
     const body_md = (json.body_md ?? "").toString();

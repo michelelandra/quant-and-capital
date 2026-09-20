@@ -20,9 +20,6 @@ const canEdit = process.env.NEXT_PUBLIC_ENABLE_EDIT === "true";
 /* ------------------------------------------------------------- */
 /* COSTANTI                                                      */
 const INITIAL_CASH = 10_000;                // capitale di partenza
-const STORAGE_KEY  = "portfolio";
-const HISTORY_KEY  = "portfolio_history";
-const SPY_BASE_KEY = "spy_base";            // primo prezzo SPY per % benchmark
 const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#8dd1e1"];
 const SUGGESTED_TICKERS = [
   "AAPL","MSFT","GOOGL","AMZN","TSLA","META","NVDA","BRK.B",
@@ -45,96 +42,316 @@ export type Position = {
 };
 
 
-export type HistoryPoint = { date: string; port: number; sp: number };
+export type HistoryPoint = {
+  date: string;
+  equity: number;
+  port: number;
+  sp: number;
+  spyPrice: number;
+};
+
+type OpenLot = {
+  qty: number;
+  entry: number;
+  leverage: number;
+  note?: string;
+  date: string;
+};
+
+type PortfolioRow = {
+  ticker: string;
+  qty: number;
+  avg: number;
+  current: number;
+  pl: number;
+  plPct: number;
+  leverage: number;
+  marketValue: number;
+  grossExposure: number;
+  netExposure: number;
+  direction: "Long" | "Short";
+  note?: string;
+};
+
+type AccountingResult = {
+  cash: number;
+  rows: PortfolioRow[];
+  realizedPL: number;
+  unrealizedPL: number;
+  totalPL: number;
+  netMarketValue: number;
+  grossExposure: number;
+  netExposure: number;
+  equity: number;
+};
+
+const EPS = 1e-9;
+
+function buildAccounting(
+  history: Position[],
+  prices: Record<string, number>
+): AccountingResult {
+  const lotsByTicker = new Map<string, OpenLot[]>();
+  let cash = INITIAL_CASH;
+  let realizedPL = 0;
+
+  for (const tx of history) {
+    const txQty = Number(tx.qty) || 0;
+    const txPrice = Number(tx.price) || 0;
+    const txLeverage = Math.max(1, Number(tx.leverage) || 1);
+
+    if (Math.abs(txQty) < EPS || txPrice <= 0) continue;
+
+    // Cash flow of the underlying transaction:
+    // buy/cover (+qty) consumes cash, sell/short (-qty) produces cash.
+    cash -= txQty * txPrice;
+
+    const lots = lotsByTicker.get(tx.ticker) ?? [];
+    let remaining = txQty;
+
+    // FIFO matching against lots in the opposite direction.
+    while (Math.abs(remaining) > EPS) {
+      const oppositeIndex = lots.findIndex(
+        (lot) => Math.sign(lot.qty) !== Math.sign(remaining)
+      );
+
+      if (oppositeIndex === -1) break;
+
+      const lot = lots[oppositeIndex];
+      const lotSign = Math.sign(lot.qty);
+      const closeQty = Math.min(Math.abs(remaining), Math.abs(lot.qty));
+
+      const baseRealized = closeQty * (txPrice - lot.entry) * lotSign;
+      const leveragedRealized = baseRealized * lot.leverage;
+      realizedPL += leveragedRealized;
+
+      // The normal buy/sell cash flow already realizes the 1x component.
+      // Add only the extra P/L created by synthetic leverage.
+      cash += baseRealized * (lot.leverage - 1);
+
+      lot.qty -= lotSign * closeQty;
+      remaining += lotSign * closeQty;
+
+      if (Math.abs(lot.qty) < EPS) lots.splice(oppositeIndex, 1);
+    }
+
+    if (Math.abs(remaining) > EPS) {
+      lots.push({
+        qty: remaining,
+        entry: txPrice,
+        leverage: txLeverage,
+        note: tx.note,
+        date: tx.date,
+      });
+    }
+
+    lotsByTicker.set(tx.ticker, lots);
+  }
+
+  const rows: PortfolioRow[] = [];
+  let unrealizedPL = 0;
+  let netMarketValue = 0;
+  let grossExposure = 0;
+  let netExposure = 0;
+  let leverageAdjustment = 0;
+
+  for (const [ticker, lots] of lotsByTicker.entries()) {
+    if (!lots.length) continue;
+
+    const qty = lots.reduce((sum, lot) => sum + lot.qty, 0);
+    if (Math.abs(qty) < EPS) continue;
+
+    const absQty = lots.reduce((sum, lot) => sum + Math.abs(lot.qty), 0);
+    const avg =
+      lots.reduce((sum, lot) => sum + Math.abs(lot.qty) * lot.entry, 0) /
+      absQty;
+    const basis = lots.reduce(
+      (sum, lot) => sum + Math.abs(lot.qty) * lot.entry,
+      0
+    );
+    const current = prices[ticker] > 0 ? prices[ticker] : avg;
+
+    const pl = lots.reduce((sum, lot) => {
+      const basePL =
+        Math.abs(lot.qty) * (current - lot.entry) * Math.sign(lot.qty);
+      return sum + basePL * lot.leverage;
+    }, 0);
+
+    const extraLeveragedPL = lots.reduce((sum, lot) => {
+      const basePL =
+        Math.abs(lot.qty) * (current - lot.entry) * Math.sign(lot.qty);
+      return sum + basePL * (lot.leverage - 1);
+    }, 0);
+
+    const weightedLeverage =
+      lots.reduce(
+        (sum, lot) => sum + Math.abs(lot.qty) * lot.leverage,
+        0
+      ) / absQty;
+
+    const rowGrossExposure = lots.reduce(
+      (sum, lot) => sum + Math.abs(lot.qty) * current * lot.leverage,
+      0
+    );
+    const rowNetExposure = lots.reduce(
+      (sum, lot) => sum + lot.qty * current * lot.leverage,
+      0
+    );
+
+    const note = [...lots].reverse().find((lot) => lot.note)?.note;
+
+    rows.push({
+      ticker,
+      qty,
+      avg,
+      current,
+      pl,
+      plPct: basis > 0 ? (pl / basis) * 100 : 0,
+      leverage: weightedLeverage,
+      marketValue: qty * current,
+      grossExposure: rowGrossExposure,
+      netExposure: rowNetExposure,
+      direction: qty > 0 ? "Long" : "Short",
+      note,
+    });
+
+    unrealizedPL += pl;
+    netMarketValue += qty * current;
+    grossExposure += rowGrossExposure;
+    netExposure += rowNetExposure;
+    leverageAdjustment += extraLeveragedPL;
+  }
+
+  rows.sort((a, b) => a.ticker.localeCompare(b.ticker));
+
+  const equity = cash + netMarketValue + leverageAdjustment;
+  const totalPL = realizedPL + unrealizedPL;
+
+  return {
+    cash,
+    rows,
+    realizedPL,
+    unrealizedPL,
+    totalPL,
+    netMarketValue,
+    grossExposure,
+    netExposure,
+    equity,
+  };
+}
+
+function buildTransactionLabels(history: Position[]) {
+  const netByTicker: Record<string, number> = {};
+  const labels: Record<string, string> = {};
+
+  for (const tx of history) {
+    const before = netByTicker[tx.ticker] ?? 0;
+    const amount = Math.abs(tx.qty);
+
+    if (tx.qty > 0) {
+      if (before < 0) {
+        labels[tx.id] = amount <= Math.abs(before) ? "COVER" : "COVER / BUY";
+      } else {
+        labels[tx.id] = "BUY";
+      }
+    } else {
+      if (before > 0) {
+        labels[tx.id] = amount <= before ? "SELL" : "SELL / SHORT";
+      } else {
+        labels[tx.id] = "SHORT";
+      }
+    }
+
+    netByTicker[tx.ticker] = before + tx.qty;
+  }
+
+  return labels;
+}
+
 
 /* ------------------------------------------------------------- */
 export default function PortfolioPage() {
   /* --------- stato ------------------------------------------- */
-  const [cash, setCash]         = useState<number>(INITIAL_CASH);
-  const [history, setHistory]   = useState<Position[]>([]);
-  const [ticker, setTicker]     = useState("");
-  const [qty, setQty]           = useState(0);
-  const [note, setNote]         = useState("");
-  const [prices, setPrices]     = useState<Record<string, number>>({});
+  const [history, setHistory] = useState<Position[]>([]);
+  const [ticker, setTicker] = useState("");
+  const [qty, setQty] = useState(0);
+  const [note, setNote] = useState("");
+  const [prices, setPrices] = useState<Record<string, number>>({});
   const [spyPrice, setSpyPrice] = useState<number>(0);
-const [sortBy, setSortBy]   = useState<"plPct" | "qty" | null>(null);
-const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-const [filterTicker] = useState<string>("");   // "" = tutti
-const [txFilter, setTxFilter] = useState<string>("");
-const [leverage, setLeverage] = useState<number>(1);
-const [mounted, setMounted] = useState(false);
-const portfolioValue = history.reduce((acc, h) => {
-  const price = prices[h.ticker] ?? 0;
-  return acc + h.qty * price * (h.leverage ?? 1);
-}, 0);
-const [noteSellMap, setNoteSellMap] = useState<Record<string, string>>({});
-const [qtyToSellMap, setQtyToSellMap] = useState<Record<string, number>>({});
+  const [sortBy, setSortBy] = useState<"plPct" | "qty" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [filterTicker] = useState<string>("");
+  const [txFilter, setTxFilter] = useState<string>("");
+  const [leverage, setLeverage] = useState<number>(1);
+  const [mounted, setMounted] = useState(false);
+  const [portfolioLoaded, setPortfolioLoaded] = useState(false);
+  const [marketDataLoaded, setMarketDataLoaded] = useState(false);
+  const [snapshotLoaded, setSnapshotLoaded] = useState(false);
+  const [equityHistory, setEquityHistory] = useState<HistoryPoint[]>([]);
+  const [spyBasePrice, setSpyBasePrice] = useState<number | null>(null);
+  const [noteSellMap, setNoteSellMap] = useState<Record<string, string>>({});
+  const [qtyToSellMap, setQtyToSellMap] = useState<Record<string, number>>({});
 
+  // The transaction log is the source of truth. Cash is derived from it,
+  // rather than maintained independently, so it cannot drift out of sync.
+  const ledgerBase = useMemo(() => buildAccounting(history, {}), [history]);
+  const cash = ledgerBase.cash;
+  const tickers = ledgerBase.rows.map((row) => row.ticker);
 
+  const handleSell = async (symbol: string) => {
+    const row = rows.find((r) => r.ticker === symbol);
+    if (!row) return;
 
-const totalValue = cash + portfolioValue;
+    const closeQty = qtyToSellMap[symbol] ?? 0;
+    if (closeQty <= 0 || closeQty > Math.abs(row.qty)) {
+      alert(`❌ Invalid quantity to close for ${symbol}`);
+      return;
+    }
 
-const handleSell = async (ticker: string) => {
-  const active = history.filter((h) => h.ticker === ticker);
-  const ownedQty = active.reduce((sum, h) => sum + h.qty, 0);
-  const sellQty = qtyToSellMap[ticker] ?? 0;
+    const currentPrice = prices[symbol] || row.current || row.avg;
+    const signedQty = row.qty > 0 ? -closeQty : closeQty;
 
-  if (sellQty <= 0 || sellQty > ownedQty) {
-    alert(`❌ Invalid quantity to sell for ${ticker}`);
-    return;
-  }
+    const previewOperation: Position = {
+      id: uuidv4(),
+      ticker: symbol,
+      qty: signedQty,
+      price: currentPrice,
+      note: "",
+      date: today,
+      leverage: row.leverage,
+      type: signedQty < 0 ? "sell" : "buy",
+    };
 
-  const avgPrice =
-    active.reduce((sum, h) => sum + h.qty * h.price, 0) / ownedQty;
-  const leverage = active[0].leverage ?? 1;
-  const currentPrice = prices[ticker] ?? avgPrice;
+    const preview = buildAccounting([...history, previewOperation], prices);
+    const realizedOnClose = preview.realizedPL - accounting.realizedPL;
+    const action = row.qty > 0 ? "Sold" : "Covered";
+    const noteBase = `${action} ${closeQty} ${symbol} at ${currentPrice.toFixed(2)}€ — P/L: ${realizedOnClose.toFixed(2)}€`;
+    const userNote = noteSellMap[symbol] || "";
+    const fullNote = userNote ? `${noteBase} | Reason: ${userNote}` : noteBase;
 
-  const plRealized = (currentPrice - avgPrice) * sellQty * leverage;
-  const noteBase = `Sold ${sellQty} ${ticker} at ${currentPrice.toFixed(2)}€ — P/L: ${plRealized.toFixed(2)}€`;
-  const sellNote = noteSellMap[ticker] || "";
-  const fullNote = sellNote ? `${noteBase} | Reason: ${sellNote}` : noteBase;
+    const closeOperation: Position = {
+      ...previewOperation,
+      note: fullNote,
+    };
 
-  const sellOperation: Position = {
-    id: uuidv4(),
-    ticker,
-    qty: -sellQty,
-    price: currentPrice,
-    note: fullNote,
-    date: today,
-    leverage,
-    type: "sell",
+    if (canEdit) {
+      const res = await fetch("/api/add-operation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(closeOperation),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert("❌ Failed to save operation: " + (data?.error || res.status));
+        return;
+      }
+    }
+
+    setHistory((h) => [...h, closeOperation]);
+    setNoteSellMap((prev) => ({ ...prev, [symbol]: "" }));
+    setQtyToSellMap((prev) => ({ ...prev, [symbol]: 0 }));
   };
-
-  const newCash = cash + sellQty * avgPrice * leverage;
-
-  setCash(newCash);
-  setHistory((h) => [...h, sellOperation]);
-  setNote("");
-  setNoteSellMap((prev) => ({ ...prev, [ticker]: "" }));
-  setQtyToSellMap((prev) => ({ ...prev, [ticker]: 0 }));
-
-  if (canEdit) {
-    const { error: cashError } = await supabase
-      .from("portfolio_cash")
-      .upsert([{ amount: newCash, updated_at: new Date().toISOString() }]);
-
-    if (cashError) {
-      alert("❌ Failed to update cash.");
-      console.error(cashError.message);
-    }
-
-    const { error: historyError } = await supabase
-      .from("portfolio_history")
-      .insert([sellOperation]);
-
-    if (historyError) {
-      alert("❌ Failed to save sell operation.");
-      console.error(historyError.message);
-    }
-  }
-};
-
-
 
 
 useEffect(() => {
@@ -200,87 +417,42 @@ const toggleSort = (field: "plPct" | "qty") => {
   const today = dayjs().format("YYYY-MM-DD");
 
   // -------- caricamento iniziale ------------------------------ */
-useEffect(() => {
-  const fetchPortfolio = async () => {
-    if (canEdit) {
-      // 👤 Proprietario: carica direttamente da Supabase
-      const { data: cashRow } = await supabase
-        .from("portfolio_cash")
-        .select("amount")
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .single();
+  useEffect(() => {
+    const fetchPortfolio = async () => {
+      if (canEdit) {
+        const { data: historyRows, error } = await supabase
+          .from("portfolio_history")
+          .select("*")
+          .order("date", { ascending: true });
 
-      const { data: historyRows } = await supabase
-        .from("portfolio_history")
-        .select("*");
+        if (error) {
+          console.error("Failed to load portfolio history:", error.message);
+          return;
+        }
 
-      setCash(cashRow?.amount ?? INITIAL_CASH);
-      setHistory(historyRows ?? []);
-    } else {
-      // 👥 Visitatori: carica dai proxy interni (no CORS)
-      const [, historyRes] = await Promise.all([
+        setHistory(historyRows ?? []);
+        setPortfolioLoaded(true);
+      } else {
+        const historyRes = await fetch("/api/safe-fetch", { cache: "no-store" });
+        const historyData = await historyRes.json();
+        setHistory(Array.isArray(historyData) ? historyData : []);
+        setPortfolioLoaded(true);
+      }
+    };
 
-  fetch("/api/safe-cash"), // ignorato, lo calcoliamo noi
-  fetch("/api/safe-fetch"),
-]);
-
-const historyData = await historyRes.json();
-setHistory(historyData ?? []);
-
-const netCashMovement = historyData?.reduce((acc: number, h: any) => {
-  const isSell = h.type === "sell";
-  const delta = Math.abs(h.qty) * h.price * (h.leverage ?? 1);
-  return acc + (isSell ? delta : -delta);
-}, 0) ?? 0;
-
-setCash(INITIAL_CASH + netCashMovement);
-
-    }
-  };
-
-  fetchPortfolio();
-}, [canEdit]);
-
-
+    fetchPortfolio();
+  }, []);
 
 
     /* --------- persistenza ------------------------------------ */
-useEffect(() => {
-  if (!canEdit) return;
-
-  const saveToSupabase = async () => {
-    try {
-      const { error: cashError } = await supabase
-        .from("portfolio_cash")
-        .upsert([{ amount: cash, updated_at: new Date().toISOString() }]);
-
-      if (cashError) throw new Error(cashError.message);
-
-     for (const h of history) {
-  const { error: insertError } = await supabase
-    .from("portfolio_history")
-   .upsert([h as any], { onConflict: "id" });
-
-
-  if (insertError) throw new Error(insertError.message);
-}
-
-
-
-      console.log("✅ Saved to Supabase");
-    } catch (err) {
-      console.error("❌ Supabase save failed:", err);
-    }
-  };
-
-  saveToSupabase();
-}, [cash, history]);
+// Le singole operazioni vengono gia salvate tramite /api/add-operation.
+// Non risalviamo automaticamente tutto lo storico dal browser: oltre a essere
+// ridondante, questo generava richieste Supabase duplicate e NetworkError in dev.
 
 
 /* --------- salva sul file JSON pubblico ------------------- */
 useEffect(() => {
-  if (!canEdit) return;
+  if (!canEdit || !portfolioLoaded) return;
 
   fetch("/api/portfolio", {
     method: "POST",
@@ -297,276 +469,323 @@ useEffect(() => {
     .catch(() => {
       alert("❌ Network error while saving portfolio.");
     });
-}, [cash, history]);
+}, [cash, history, portfolioLoaded]);
 
 
 
-  /* --------- aggregati -------------------------------------- */
-  const aggregate = useMemo(() => {
-    const acc: Record<string, { qty: number; cost: number }> = {};
-    history.forEach((p) => {
-      acc[p.ticker] ??= { qty: 0, cost: 0 };
-      acc[p.ticker].qty += p.qty;
-      acc[p.ticker].cost += p.qty * p.price;
-    });
-    return acc;
-  }, [history]);
+  /* --------- prezzi e motore contabile ---------------------- */
+  const allSuggestions = useMemo(
+    () => Array.from(new Set([...SUGGESTED_TICKERS, ...tickers])),
+    [tickers]
+  );
 
-  const tickers = Object.keys(aggregate);
-  // ticker statici + quelli attualmente presenti nel portafoglio
-const allSuggestions = useMemo(
-  () => Array.from(new Set([...SUGGESTED_TICKERS, ...tickers])),
-  [tickers]
-);
-
-
-  /* --------- fetch prezzi ----------------------------------- */
   const fetchPrices = useCallback(async (syms: string[]) => {
     if (!syms.length) return {} as Record<string, number>;
     const res = await fetch(`/api/quote?symbol=${syms.join()}`);
     const raw = await res.json();
     const arr = Array.isArray(raw) ? raw : [raw];
     const out: Record<string, number> = {};
-    arr.forEach((d) => (out[d.symbol] = Number(d.price || 0)));
+    arr.forEach((d) => {
+      if (d?.symbol) out[d.symbol] = Number(d.price || 0);
+    });
     return out;
   }, []);
 
-  /* fetch prezzi titoli + SPY -------------------------------- */
   useEffect(() => {
-    (async () => {
-      const latest = await fetchPrices(tickers);
-      setPrices(latest);
+    let alive = true;
 
-      const spy = await fetchPrices(["SPY"]);
-      if (spy.SPY) setSpyPrice(spy.SPY);
+    (async () => {
+      try {
+        const latest = await fetchPrices(tickers);
+        if (!alive) return;
+        setPrices(latest);
+
+        const spy = await fetchPrices(["SPY"]);
+        if (!alive) return;
+        if (spy.SPY) setSpyPrice(spy.SPY);
+      } finally {
+        if (alive) setMarketDataLoaded(true);
+      }
     })();
+
+    return () => {
+      alive = false;
+    };
   }, [fetchPrices, tickers.join(",")]);
 
-  /* --------- righe tabella --------------------------------- */
-  // ---- righe tabella con P/L %, filtro e ordinamento ----
-const baseRows = tickers.map(t => {
-  const { qty: q, cost } = aggregate[t];
-  const cur  = prices[t] ?? 0;
-  const avg  = cost / q;
-  const lev = history.find((p) => p.ticker === t)?.leverage ?? 1;
-const leverage =
-  history.find((p) => p.ticker === t && p.date === today)?.leverage ?? 1;
-const pl = qty * (cur - avg) * leverage;
+  const accounting = useMemo(
+    () => buildAccounting(history, prices),
+    [history, prices]
+  );
 
-const plPct = (pl / (Math.abs(q) * avg)) * 100;
-  return { ticker: t, qty: q, avg, current: cur, pl, plPct, leverage: lev };
-});
+  const baseRows = accounting.rows;
 
-const rows = useMemo(() => {
-  let r = [...baseRows];
+  const rows = useMemo(() => {
+    let r = [...baseRows];
 
-  /* filtro ticker */
-  if (filterTicker) r = r.filter(row => row.ticker === filterTicker);
+    if (filterTicker) r = r.filter((row) => row.ticker === filterTicker);
 
-  /* ordinamento */
-  if (sortBy) {
-    r.sort((a, b) =>
-      sortDir === "asc"
-        ? a[sortBy]! - b[sortBy]!
-        : b[sortBy]! - a[sortBy]!
+    if (sortBy) {
+      r.sort((a, b) =>
+        sortDir === "asc"
+          ? a[sortBy] - b[sortBy]
+          : b[sortBy] - a[sortBy]
+      );
+    }
+
+    return r;
+  }, [baseRows, filterTicker, sortBy, sortDir]);
+
+  const insights = useMemo(() => {
+    if (!baseRows.length) return null;
+
+    const byPct = [...baseRows].sort((a, b) => b.plPct - a.plPct);
+    const byImpact = [...baseRows].sort(
+      (a, b) => Math.abs(b.pl) - Math.abs(a.pl)
     );
-  }
-  return r;
-}, [baseRows, filterTicker, sortBy, sortDir]);
+    const byExposure = [...baseRows].sort(
+      (a, b) => b.grossExposure - a.grossExposure
+    );
 
-const insights = useMemo(() => {
-  if (!rows.length) return null;
+    return {
+      topGainer: byPct[0],
+      topLoser: byPct[byPct.length - 1],
+      largestPosition: byExposure[0],
+      mostImpactful: byImpact[0],
+    };
+  }, [baseRows]);
 
- const sortedByPL = [...rows].sort((a, b) =>
-  Math.abs(b.qty * (b.current - b.avg) * (b.leverage ?? 1)) -
-  Math.abs(a.qty * (a.current - a.avg) * (a.leverage ?? 1))
-);
+  const portfolioValue = accounting.grossExposure;
+  const totalValue = accounting.equity;
+  const equity = accounting.equity;
+  const realizedPL = accounting.realizedPL;
+  const unrealizedPL = accounting.unrealizedPL;
+  const totalPL = accounting.totalPL;
+  const portPct = (totalPL / INITIAL_CASH) * 100;
+  const transactionLabels = useMemo(
+    () => buildTransactionLabels(history),
+    [history]
+  );
 
-  
-  const sortedByImpact = [...rows].sort((a, b) =>
-  Math.abs(b.pl * (b.leverage ?? 1)) - Math.abs(a.pl * (a.leverage ?? 1))
-);
-
-//const sortedByValue = [...rows].sort((a, b) =>
-  //Math.abs(b.qty * b.current * (b.leverage ?? 1)) -
-  //Math.abs(a.qty * a.current * (a.leverage ?? 1))
-//);
-
-  return {
-    topGainer: sortedByPL[0],
-    topLoser: sortedByPL[sortedByPL.length - 1],
-   largestPosition: [...rows]
-  .sort((a, b) => Math.abs(b.qty * b.current) - Math.abs(a.qty * a.current))[0],
-
-    mostImpactful: sortedByImpact[0],
-  };
-}, [rows]);
-
-
-
-  /* --------- equity & performance --------------------------- */
-  const equity = useMemo(
-  () =>
-    history.reduce(
-      (e, p) => e + p.qty * (prices[p.ticker] ?? p.price),
-      0
-    ) + cash,
-  [history, prices, cash]
-);
-
-const realizedPL = useMemo(() => {
-  return history
-    .filter(p => p.date !== today)
-    .reduce((sum, p) => {
-      const cur = prices[p.ticker] ?? p.price;
-      return sum + p.qty * (cur - p.price);
-    }, 0);
-}, [history, prices, today]);
-
-const unrealizedPL = rows.reduce((s, r) => s + r.pl, 0);
-
-const portPct = ((equity / INITIAL_CASH) - 1) * 100;
-
-  /* --------- % S&P 500 -------------------------------------- */
-  const baseSpy = typeof window !== "undefined" ? Number(localStorage.getItem(SPY_BASE_KEY) || 0) : 0;
+  /* --------- storico Portfolio / S&P 500 su Supabase -------- */
   useEffect(() => {
-    if (typeof window === "undefined" || !spyPrice) return;
-    if (!baseSpy) localStorage.setItem(SPY_BASE_KEY, String(spyPrice));
-  }, [spyPrice]);
+    let alive = true;
 
-  const spPct = baseSpy ? ((spyPrice / baseSpy) - 1) * 100 : 0;
+    const loadSnapshots = async () => {
+      try {
+        const res = await fetch("/api/portfolio-equity-history", {
+          cache: "no-store",
+        });
+        const json = await res.json().catch(() => ({}));
 
-  /* --------- salva storico giornaliero ---------------------- */
+        if (!res.ok) {
+          throw new Error(json?.error || `HTTP ${res.status}`);
+        }
+
+        const points: HistoryPoint[] = Array.isArray(json?.history)
+          ? json.history.map((p: any) => ({
+              date: String(p.date),
+              equity: Number(p.equity),
+              port: Number(p.portfolio_return),
+              sp: Number(p.sp500_return),
+              spyPrice: Number(p.sp500_price),
+            }))
+          : [];
+
+        if (!alive) return;
+        setEquityHistory(points);
+        setSpyBasePrice(points[0]?.spyPrice || null);
+      } catch (err) {
+        console.error("Failed to load portfolio equity history:", err);
+      } finally {
+        if (alive) setSnapshotLoaded(true);
+      }
+    };
+
+    loadSnapshots();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const effectiveSpyBase = spyBasePrice || spyPrice;
+  const spPct =
+    effectiveSpyBase > 0 && spyPrice > 0
+      ? ((spyPrice / effectiveSpyBase) - 1) * 100
+      : 0;
+
+  /* --------- upsert del punto giornaliero ------------------- */
   useEffect(() => {
-    if (!spyPrice) return;
-    if (typeof window === "undefined") return;
+    if (!canEdit) return;
+    if (!portfolioLoaded || !snapshotLoaded || !marketDataLoaded || !spyPrice) return;
 
-    const saved: HistoryPoint[] = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+    const current: HistoryPoint = {
+      date: today,
+      equity,
+      port: portPct,
+      sp: spPct,
+      spyPrice,
+    };
 
-    const idx = saved.findIndex((h) => h.date === today);
-    const entry: HistoryPoint = { date: today, port: portPct, sp: spPct };
+    // Aggiornamento ottimistico della UI. Una sola riga per data.
+    setEquityHistory((prev) => {
+      const next = [...prev];
+      const idx = next.findIndex((p) => p.date === today);
+      if (idx >= 0) next[idx] = current;
+      else next.push(current);
+      return next.sort((a, b) => a.date.localeCompare(b.date));
+    });
 
-    if (idx >= 0) saved[idx] = entry;
-    else saved.push(entry);
+    if (!spyBasePrice) setSpyBasePrice(spyPrice);
 
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(saved));
-  }, [portPct, spPct, spyPrice, today]);
-
-  /* --------- equityHistory per grafico ---------------------- */
-  const equityHistory: HistoryPoint[] = useMemo(() => {
-    if (typeof window === "undefined") return [];
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-  }, [portPct, spPct]);
+    fetch("/api/portfolio-equity-history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: today,
+        equity,
+        portfolio_return: portPct,
+        sp500_price: spyPrice,
+        sp500_return: spPct,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data?.error || `HTTP ${res.status}`);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to save daily portfolio snapshot:", err);
+      });
+  }, [
+    canEdit,
+    portfolioLoaded,
+    snapshotLoaded,
+    marketDataLoaded,
+    spyPrice,
+    spyBasePrice,
+    today,
+    equity,
+    portPct,
+    spPct,
+  ]);
 
   /* --------- handler Add ------------------------------------ */
   const handleAdd = async (e: FormEvent) => {
-  e.preventDefault();
-  if (!canEdit) return; // ⛔ blocca i visitatori
-  if (!ticker || !qty) return;
+    e.preventDefault();
+    if (!canEdit) return;
+    if (!ticker || !qty) return;
 
-  const symbol = ticker.toUpperCase();
-  const priceMap = await fetchPrices([symbol]);
-  const purchasePrice = priceMap[symbol];
+    const symbol = ticker.toUpperCase().trim();
+    const priceMap = await fetchPrices([symbol]);
+    const purchasePrice = priceMap[symbol];
 
-  if (!purchasePrice) {
-    alert("Price unavailable – ticker not supported or API error");
-    return;
-  }
+    if (!purchasePrice) {
+      alert("Price unavailable – ticker not supported or API error");
+      return;
+    }
 
-  const cost = Math.abs(qty) * purchasePrice;
-  const isBuy = qty > 0;
-  const newCash = isBuy ? cash - cost : cash + cost;
+    const newOperation: Position = {
+      id: uuidv4(),
+      ticker: symbol,
+      qty,
+      price: purchasePrice,
+      note,
+      date: today,
+      leverage,
+      type: qty < 0 ? "sell" : "buy",
+    };
 
-  if (isBuy && cost > cash) {
-    alert("Not enough cash");
-    return;
-  }
-
-  const newOperation = {
-    id: uuidv4(),
-    ticker: symbol,
-    qty,
-    price: purchasePrice,
-    note,
-    date: today,
-    leverage,
-  };
-
-  if (canEdit) {
-    const res = await fetch("/api/add-operation", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newOperation),
+    const preview = buildAccounting([...history, newOperation], {
+      ...prices,
+      [symbol]: purchasePrice,
     });
 
-    if (!res.ok) {
-      const data = await res.json();
-      alert("❌ Failed to save to Supabase: " + data.error);
-      console.error("Supabase insert failed", data.error);
+    if (preview.cash < -EPS) {
+      alert("Not enough cash for this operation");
       return;
     }
 
-    const { error: cashError } = await supabase
-      .from("portfolio_cash")
-      .upsert([{ amount: newCash, updated_at: new Date().toISOString() }]);
+    if (canEdit) {
+      const res = await fetch("/api/add-operation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newOperation),
+      });
 
-    if (cashError) {
-      alert("❌ Failed to update cash.");
-      console.error("Supabase cash update failed", cashError.message);
-      return;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert("❌ Failed to save to Supabase: " + (data?.error || res.status));
+        return;
+      }
     }
-  }
 
-  // ✅ aggiorna stato locale
-  setHistory((h) => [...h, newOperation]);
-  setCash(newCash);
-  setTicker("");
-  setQty(0);
-  setNote("");
-};
-
-
+    setHistory((h) => [...h, newOperation]);
+    setTicker("");
+    setQty(0);
+    setNote("");
+  };
 
 
   /* --------- reset helpers ---------------------------------- */
-  const resetDay = () => {
-    if (!canEdit) return; // ⛔ blocca i visitatori
+  const resetDay = async () => {
+    if (!canEdit) return;
+
+    const todayRows = history.filter((p) => p.date === today);
     const keep = history.filter((p) => p.date !== today);
-    const refund = history
-      .filter((p) => p.date === today)
-      .reduce((s, p) => s + Math.abs(p.qty) * p.price * (p.qty > 0 ? 1 : -1), 0);
+
+    if (todayRows.length) {
+      const { error } = await supabase
+        .from("portfolio_history")
+        .delete()
+        .in("id", todayRows.map((p) => p.id));
+
+      if (error) {
+        alert("❌ Failed to reset today's operations.");
+        console.error(error.message);
+        return;
+      }
+    }
+
     setHistory(keep);
-    setCash((c) => c + refund);
+    // Il punto di oggi viene ricalcolato automaticamente dal nuovo ledger.
   };
 
-  const resetAll = () => {
-    if (!canEdit) return; // ⛔ blocca i visitatori
-  setHistory([]);
-  setCash(INITIAL_CASH);
-if (canEdit) {
-  (async () => {
-    const { error: cashError } = await supabase.from("portfolio_cash").insert([{
-      amount: INITIAL_CASH,
-      updated_at: new Date().toISOString(),
-    }]);
+  const resetAll = async () => {
+    if (!canEdit) return;
+    if (!confirm("Reset the entire simulated portfolio and its performance history?")) return;
 
-   const { error: historyError } = await supabase.from("portfolio_history").delete().neq("ticker", "___unlikely___");
+    const { error: historyError } = await supabase
+      .from("portfolio_history")
+      .delete()
+      .neq("ticker", "___unlikely___");
 
-    if (cashError || historyError) {
-      alert("❌ Failed to reset Supabase data.");
-      console.error("Supabase error", { cashError, historyError });
+    if (historyError) {
+      alert("❌ Failed to reset portfolio transactions.");
+      console.error(historyError.message);
+      return;
     }
-  })();
-}
 
+    try {
+      const res = await fetch("/api/portfolio-equity-history", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all: true }),
+      });
 
-  if (typeof window !== "undefined") {
-    localStorage.removeItem(HISTORY_KEY);
-    localStorage.removeItem(SPY_BASE_KEY);
-    localStorage.removeItem(STORAGE_KEY);
-  }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+    } catch (err) {
+      console.error("Failed to clear performance history:", err);
+    }
 
-  if (canEdit) {
+    setEquityHistory([]);
+    setSpyBasePrice(null);
+    setHistory([]);
+
     fetch("/api/portfolio", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -574,8 +793,7 @@ if (canEdit) {
     }).catch((err) =>
       console.error("Error saving reset portfolio to file:", err)
     );
-  }
-};
+  };
 
 const handleSave = async () => {
   if (!canEdit) return; // ⛔ blocca i visitatori
@@ -624,47 +842,61 @@ if (!mounted) return null;
 </div>
 
 {/* Portfolio Snapshot ------------------------------------------------ */}
-<div className="text-right text-sm mt-4 mb-6">
-  <div className="text-xl font-bold text-gray-800">
-    Total Portfolio:&nbsp;
-    <span className="text-blue-700">
+<div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 mb-4">
+  <div className="border rounded-lg p-3 bg-white shadow-sm">
+    <div className="text-xs text-gray-500">Total Equity</div>
+    <div className="text-xl font-bold text-blue-700">
       {totalValue.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
-    </span>
-  </div>
-  <div className="text-sm text-gray-600 mt-1">
-    <div>
-      Cash:&nbsp;
-      <span className="font-medium">
-        {cash.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
-      </span>
     </div>
-    <div>
-      Asset Value:&nbsp;
-      <span className="font-medium">
-        {portfolioValue.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
-      </span>
+  </div>
+  <div className="border rounded-lg p-3 bg-white shadow-sm">
+    <div className="text-xs text-gray-500">Cash</div>
+    <div className="text-lg font-semibold">
+      {cash.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
+    </div>
+  </div>
+  <div className="border rounded-lg p-3 bg-white shadow-sm">
+    <div className="text-xs text-gray-500">Gross Exposure</div>
+    <div className="text-lg font-semibold">
+      {portfolioValue.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
+    </div>
+  </div>
+  <div className="border rounded-lg p-3 bg-white shadow-sm">
+    <div className="text-xs text-gray-500">Net Exposure</div>
+    <div className="text-lg font-semibold">
+      {accounting.netExposure.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
     </div>
   </div>
 </div>
 
 
-
-{/* Realized / Unrealized P/L -------------------------------- */}
-<div className="flex flex-wrap items-center gap-4 text-sm text-gray-700 mb-6 bg-white/80 p-3 rounded-lg shadow-sm border border-gray-200">
-  <span>
-    <span className="font-medium">Realized P/L:</span>{" "}
-    <span className={realizedPL >= 0 ? "text-green-600" : "text-red-600"}>
+{/* P/L Summary ------------------------------------------------ */}
+<div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm mb-6">
+  <div className="border rounded-lg p-3 bg-white shadow-sm">
+    <div className="text-gray-500">Realized P/L</div>
+    <div className={`font-semibold ${realizedPL >= 0 ? "text-green-600" : "text-red-600"}`}>
       {realizedPL.toFixed(2)} €
-    </span>
-  </span>
-  <span>
-    <span className="font-medium">Unrealized P/L:</span>{" "}
-    <span className={unrealizedPL >= 0 ? "text-green-600" : "text-red-600"}>
+    </div>
+  </div>
+  <div className="border rounded-lg p-3 bg-white shadow-sm">
+    <div className="text-gray-500">Unrealized P/L</div>
+    <div className={`font-semibold ${unrealizedPL >= 0 ? "text-green-600" : "text-red-600"}`}>
       {unrealizedPL.toFixed(2)} €
-    </span>
-  </span>
+    </div>
+  </div>
+  <div className="border rounded-lg p-3 bg-white shadow-sm">
+    <div className="text-gray-500">Total P/L</div>
+    <div className={`font-semibold ${totalPL >= 0 ? "text-green-600" : "text-red-600"}`}>
+      {totalPL.toFixed(2)} €
+    </div>
+  </div>
+  <div className="border rounded-lg p-3 bg-white shadow-sm">
+    <div className="text-gray-500">Portfolio Return</div>
+    <div className={`font-semibold ${portPct >= 0 ? "text-green-600" : "text-red-600"}`}>
+      {portPct.toFixed(2)}%
+    </div>
+  </div>
 </div>
-
 
 
       {/* form -------------------------------------------------- */}
@@ -761,6 +993,7 @@ if (!mounted) return null;
     <thead className="border-b">
   <tr className="text-left">
     <th>Ticker</th>
+    <th>Side</th>
     <th>
       <button onClick={() => toggleSort("qty")} className="flex items-center gap-1">
         Qty {sortBy === "qty" && (sortDir === "asc" ? "▲" : "▼")}
@@ -782,6 +1015,9 @@ if (!mounted) return null;
   {rows.map((r) => (
     <tr key={r.ticker} className="border-b">
       <td>{r.ticker}</td>
+      <td className={r.direction === "Long" ? "text-green-700" : "text-red-700"}>
+        {r.direction}
+      </td>
       <td>{r.qty}</td>
       <td>{r.avg.toFixed(2)} €</td>
       <td>{r.current ? r.current.toFixed(2) + " €" : "—"}</td>
@@ -792,10 +1028,10 @@ if (!mounted) return null;
         {r.plPct.toFixed(2)} %
       </td>
       <td>
-  {history.find((p) => p.ticker === r.ticker)?.note || "—"}
+  {r.note || "—"}
   <br />
   <span className="text-xs text-gray-500 italic">
-    Leverage: {history.find((p) => p.ticker === r.ticker)?.leverage ?? "—"}×
+    Leverage: {r.leverage.toFixed(2)}×
   </span>
 </td>
 {canEdit && (
@@ -804,7 +1040,7 @@ if (!mounted) return null;
       type="number"
       min={1}
       max={Math.abs(r.qty)}
-      placeholder="Qty to sell"
+      placeholder="Qty to close"
       className="border px-1 py-0.5 text-xs w-full"
       value={qtyToSellMap[r.ticker] || ""}
       onChange={(e) =>
@@ -816,7 +1052,7 @@ if (!mounted) return null;
     />
     <input
       type="text"
-      placeholder="Sell comment"
+      placeholder="Close comment"
       className="border px-1 py-0.5 text-xs w-full"
       value={noteSellMap[r.ticker] || ""}
       onChange={(e) =>
@@ -829,9 +1065,9 @@ if (!mounted) return null;
     <button
       onClick={() => handleSell(r.ticker)}
       className="text-blue-600 hover:underline text-xs"
-      title="Sell selected quantity"
+      title={r.qty > 0 ? "Sell selected quantity" : "Cover selected quantity"}
     >
-      Sell
+      {r.qty > 0 ? "Sell" : "Cover"}
     </button>
   </td>
 )}
@@ -861,12 +1097,9 @@ if (!mounted) return null;
     <div>
       <strong>💰 Largest Position:</strong>{" "}
       {insights.largestPosition.ticker} (
-      {(
-        (Math.abs(
-          insights.largestPosition.qty * insights.largestPosition.current
-        ) /
-          equity) *
-        100
+      {(accounting.grossExposure > 0
+        ? (insights.largestPosition.grossExposure / accounting.grossExposure) * 100
+        : 0
       ).toFixed(2)}
       %)
     </div>
@@ -925,7 +1158,7 @@ if (!mounted) return null;
       .map((tx) => (
         <tr
           key={tx.id}
-          className={tx.type === "sell" ? "bg-red-50 text-red-700" : ""}
+          className={tx.qty < 0 ? "bg-red-50 text-red-700" : ""}
         >
           <td>{tx.date}</td>
           <td>{tx.ticker}</td>
@@ -934,7 +1167,7 @@ if (!mounted) return null;
           </td>
           <td>{tx.price.toFixed(2)} €</td>
           <td className="text-xs font-bold uppercase tracking-wider">
-            {tx.type === "sell" ? "SELL" : "BUY"}
+            {transactionLabels[tx.id] || (tx.qty < 0 ? "SELL" : "BUY")}
           </td>
           <td>
             {tx.note || "—"}
@@ -954,8 +1187,7 @@ if (!mounted) return null;
       <ResponsiveContainer width="100%" height={250}>
         <PieChart>
           <Pie
-            data={rows.map((r) => ({ ticker: r.ticker, value: Math.abs(r.qty) * r.current * (r.leverage ?? 1)
-}))}
+            data={rows.map((r) => ({ ticker: r.ticker, value: r.grossExposure }))}
             dataKey="value"
             nameKey="ticker"
             isAnimationActive={false}
@@ -980,16 +1212,16 @@ if (!mounted) return null;
             <YAxis />
             <Tooltip formatter={(v: number) => v.toFixed(2) + " €"} />
             <Bar dataKey="pl" fill="#8884d8">
-              {rows.map((_, i) => (
-                <Cell key={i} fill={COLORS[i % COLORS.length]} />
+              {rows.map((r) => (
+                <Cell key={r.ticker} fill={r.pl >= 0 ? "#16a34a" : "#dc2626"} />
               ))}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
       <p className="text-xs text-gray-500 mt-1">
-  * Percentage performance based on initial equity of €10,000.
-</p>
+        Open-position unrealized P/L by ticker.
+      </p>
 
       {/* performance % --------------------------------------- */}
       <h2 className="font-semibold">Portfolio vs S&P 500 (%)</h2>
@@ -1006,6 +1238,9 @@ if (!mounted) return null;
           </LineChart>
         </ResponsiveContainer>
       </div>
+      <p className="text-xs text-gray-500 mt-1">
+        * Performance is measured from initial equity of €10,000. Daily portfolio and S&P 500 history is stored persistently in Supabase.
+      </p>
       <h3 className="font-semibold mt-6 mb-2">Equity Daily Log</h3>
 <div className="overflow-x-auto rounded border border-gray-200 shadow-sm bg-white">
   <table className="min-w-[400px] text-sm w-full text-left">
@@ -1035,7 +1270,7 @@ if (!mounted) return null;
 
       <div className="text-right font-bold text-lg">
         Equity {equity.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
-        {" "}– Total P/L {rows.reduce((s, r) => s + r.pl, 0).toFixed(2)} €
+        {" "}– Total P/L {totalPL.toFixed(2)} €
       </div>
       {/* Disclaimer */}
 <p className="text-xs text-gray-500 mt-8 italic">
@@ -1044,6 +1279,3 @@ if (!mounted) return null;
     </main>
   );
 }
-
-
-

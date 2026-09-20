@@ -1,13 +1,15 @@
 /* eslint-disable @next/next/no-head-element */
-import './globals.css';
-import type { Metadata } from 'next';
-import Link from 'next/link';
 
-const GA_MEASUREMENT_ID = 'G-SSZKYRDJ7N';
+import "./globals.css";
+import type { Metadata } from "next";
+import TopNav from "./components/TopNav";
+
+const GA_MEASUREMENT_ID = "G-SSZKYRDJ7N";
 
 export const metadata: Metadata = {
-  title: 'Mio Sito Portfolio',
-  description: 'Portafoglio, simulatore, analisi e studi matematici',
+  title: "Quant & Capital",
+  description:
+    "Portfolio, financial analysis, quantitative studies and trading tools",
 };
 
 export default function RootLayout({
@@ -19,13 +21,22 @@ export default function RootLayout({
     <html lang="it">
       <head>
         {/* Google Analytics 4 */}
-        <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}></script>
+        <script
+          async
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+        />
+
         <script
           dangerouslySetInnerHTML={{
             __html: `
               window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
+
+              function gtag(){
+                dataLayer.push(arguments);
+              }
+
               gtag('js', new Date());
+
               gtag('config', '${GA_MEASUREMENT_ID}', {
                 page_path: window.location.pathname
               });
@@ -33,23 +44,14 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-screen bg-white text-black">
-        <header className="w-full border-b p-4 flex gap-4 text-sm">
-  <Link href="/"> Home</Link>
-  <Link href="/portfolio"> Portfolio</Link>
-  <Link href="/analyses"> Analyses</Link>
-  <Link href="/math-studies"> Math Studies</Link>
-  <Link href="/simulator"> Simulator</Link>
-  <Link href="/trading-arena">Trading Arena</Link>
-  {/* 👇 Aggiungi queste tre nuove voci */}
-  <Link href="/scenarios"> Scenarios</Link>
-  <Link href="/case-studies"> Case Studies</Link>
-  <Link href="/trading-games"> Trading Games</Link>
-</header>
 
-        <main className="p-6 max-w-4xl mx-auto">{children}</main>
+      <body className="min-h-screen bg-white text-black">
+        <TopNav />
+
+        <main className="p-6 max-w-5xl mx-auto">
+          {children}
+        </main>
       </body>
     </html>
   );
 }
-

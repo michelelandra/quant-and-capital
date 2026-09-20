@@ -13,6 +13,14 @@ type Candle = Omit<CandlestickData, "time"> & { time: Time };
 type Side = "long" | "short";
 type Position = { side: Side; qty: number; avg: number };
 type OrderAction = "buy" | "sell";
+type MarketMode =
+  | "random"
+  | "trend-up"
+  | "trend-down"
+  | "mean-reversion"
+  | "high-vol"
+  | "choppy"
+  | "crash";
 type Fill = {
   t: number; // ms
   action: OrderAction;
@@ -33,6 +41,7 @@ export default function TradingArenaPage() {
   const [startPrice, setStartPrice] = useState(100);
   const [spread, setSpread] = useState(0.2);
   const [mid, setMid] = useState(startPrice);
+  const [marketMode, setMarketMode] = useState<MarketMode>("random");
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   /* ------- chart refs ------- */
@@ -59,6 +68,8 @@ export default function TradingArenaPage() {
 
   /* init chart via dynamic import (safe lato client) */
   useEffect(() => {
+    let cancelled = false;
+    let localChart: IChartApi | null = null;
     let resizeObs: ResizeObserver | null = null;
 
     async function init() {
@@ -66,50 +77,75 @@ export default function TradingArenaPage() {
 
       const { createChart, ColorType } = await import("lightweight-charts");
 
+      // React Strict Mode in development can mount/unmount this effect twice.
+      // If this async init belongs to an old effect, stop here.
+      if (cancelled || !containerRef.current) return;
+
+      // Defensive cleanup: never leave an old chart DOM behind.
+      containerRef.current.innerHTML = "";
+
       const chart = createChart(containerRef.current, {
-        autoSize: true,
+        width: containerRef.current.clientWidth,
+        height: 380,
         layout: {
           background: { type: ColorType.Solid, color: "#ffffff" },
           textColor: "#333",
         },
-        grid: { vertLines: { color: "#eee" }, horzLines: { color: "#eee" } },
+        grid: {
+          vertLines: { color: "#eee" },
+          horzLines: { color: "#eee" },
+        },
         rightPriceScale: { borderColor: "#ddd" },
-        timeScale: { borderColor: "#ddd", secondsVisible: true },
+        timeScale: {
+          borderColor: "#ddd",
+          secondsVisible: true,
+          timeVisible: true,
+        },
       });
 
-      let series: ISeriesApi<"Candlestick"> | null = null;
-      const anyChart = chart as unknown as Record<string, any>;
-      if (typeof anyChart.addCandlestickSeries === "function") {
-        series = anyChart.addCandlestickSeries({
-          upColor: "#22c55e",
-          downColor: "#ef4444",
-          borderUpColor: "#16a34a",
-          borderDownColor: "#dc2626",
-          wickUpColor: "#16a34a",
-          wickDownColor: "#dc2626",
-        }) as ISeriesApi<"Candlestick">;
-      } else {
-        anyChart.addLineSeries?.({ color: "#0ea5e9", lineWidth: 2 });
-        console.warn("[TradingArena] Fallback a line series");
+      if (cancelled) {
+        chart.remove();
+        return;
       }
 
+      const series = chart.addCandlestickSeries({
+        upColor: "#22c55e",
+        downColor: "#ef4444",
+        borderUpColor: "#16a34a",
+        borderDownColor: "#dc2626",
+        wickUpColor: "#16a34a",
+        wickDownColor: "#dc2626",
+      });
+
+      localChart = chart;
       chartRef.current = chart;
       seriesRef.current = series;
 
       resizeObs = new ResizeObserver(() => {
-        if (containerRef.current)
-          chart.applyOptions({ width: containerRef.current.clientWidth });
+        if (cancelled || !containerRef.current) return;
+
+        chart.applyOptions({
+          width: containerRef.current.clientWidth,
+        });
       });
+
       resizeObs.observe(containerRef.current);
     }
 
     init();
 
     return () => {
+      cancelled = true;
       resizeObs?.disconnect();
-      chartRef.current?.remove();
-      chartRef.current = null;
-      seriesRef.current = null;
+
+      if (localChart) {
+        localChart.remove();
+      }
+
+      if (chartRef.current === localChart) {
+        chartRef.current = null;
+        seriesRef.current = null;
+      }
     };
   }, []);
 
@@ -144,6 +180,111 @@ export default function TradingArenaPage() {
     return round2(d);
   }
 
+  function marketDelta(currentPrice: number) {
+    if (marketMode === "trend-up") {
+      // Trend rialzista con rumore: resta imprevedibile nel breve,
+      // ma introduce un piccolo drift positivo nel tempo.
+      const noise = (Math.random() * 2 - 1) * 0.8;
+      const drift = 0.015;
+      return round2(noise + drift);
+    }
+
+    if (marketMode === "trend-down") {
+      // Trend ribassista con rumore: e' lo specchio di Trend Up.
+      // Nel breve puo' comunque salire, ma nel tempo ha un bias negativo.
+      const noise = (Math.random() * 2 - 1) * 0.8;
+      const drift = -0.015;
+      return round2(noise + drift);
+    }
+
+    if (marketMode === "mean-reversion") {
+      // Mean reversion: il prezzo oscilla liberamente, ma quando si allontana
+      // dal prezzo iniziale aumenta gradualmente la forza che lo richiama verso la media.
+      const noise = (Math.random() * 2 - 1) * 0.75;
+      const distanceFromMean = startPrice - currentPrice;
+      const rawPull = distanceFromMean * 0.035;
+      const pull = Math.max(-0.25, Math.min(0.25, rawPull));
+      return round2(noise + pull);
+    }
+
+    if (marketMode === "high-vol") {
+      // High Volatility: nessun trend strutturale, ma oscillazioni molto piu ampie
+      // e shock occasionali in entrambe le direzioni.
+      const scale = Math.max(0.25, currentPrice / 100);
+      const noise = (Math.random() * 2 - 1) * 1.6 * scale;
+      const hasShock = Math.random() < 0.06;
+      const shock = hasShock
+        ? (Math.random() * 2 - 1) * (2.5 + Math.random() * 1.5) * scale
+        : 0;
+      return round2(noise + shock);
+    }
+
+    if (marketMode === "choppy") {
+      // Choppy: mercato laterale e nervoso.
+      // Il prezzo tende a restare vicino allo start price, ma cambia spesso
+      // direzione e puo' fare piccoli falsi breakout prima di rientrare.
+      const distanceFromCenter = startPrice - currentPrice;
+      const pullToCenter = Math.max(
+        -0.18,
+        Math.min(0.18, distanceFromCenter * 0.025)
+      );
+
+      // Rumore abbastanza vivace ma meno estremo di High Volatility.
+      const noise = (Math.random() * 2 - 1) * 0.9;
+
+      // Piccolo impulso contrario al movimento precedente della candela corrente:
+      // aumenta i cambi di direzione e rende il mercato piu "sporco".
+      const currentCandle = candleRef.current;
+      let reversalBias = 0;
+
+      if (currentCandle) {
+        const candleMove = currentCandle.close - currentCandle.open;
+
+        if (candleMove > 0.35) {
+          reversalBias = -0.12;
+        } else if (candleMove < -0.35) {
+          reversalBias = 0.12;
+        }
+      }
+
+      // Falso breakout occasionale, seguito nelle iterazioni successive
+      // dalla forza di richiamo verso il centro.
+      const fakeBreakout =
+        Math.random() < 0.05
+          ? (Math.random() < 0.5 ? -1 : 1) * (0.8 + Math.random() * 0.7)
+          : 0;
+
+      return round2(noise + pullToCenter + reversalBias + fakeBreakout);
+    }
+
+    if (marketMode === "crash") {
+      // Crash / Panic: pressione ribassista strutturale, volatilita elevata,
+      // sell-off improvvisi e rimbalzi violenti ma generalmente temporanei.
+      const scale = Math.max(0.25, currentPrice / 100);
+
+      // Rumore piu ampio di un trend normale, con drift negativo costante.
+      const noise = (Math.random() * 2 - 1) * 0.9 * scale;
+      const drift = -0.03 * scale;
+
+      // Eventi di panico: accelerazioni ribassiste improvvise.
+      const panicEvent = Math.random() < 0.055;
+      const panicShock = panicEvent
+        ? -(1.2 + Math.random() * 2.0) * scale
+        : 0;
+
+      // Dead-cat bounce: rimbalzi rapidi che non eliminano il bias ribassista.
+      const bounceEvent = !panicEvent && Math.random() < 0.10;
+      const bounce = bounceEvent
+        ? (0.6 + Math.random() * 1.4) * scale
+        : 0;
+
+      return round2(noise + drift + panicShock + bounce);
+    }
+
+    // Modalita base arcade: identica al Random Walk originale.
+    return randDelta();
+  }
+
   function startNewCandle(t: number, open: number) {
     const c: Candle = {
       time: Math.floor(t / 1000) as Time,
@@ -172,7 +313,7 @@ export default function TradingArenaPage() {
 
   function tick() {
     setMid((prev) => {
-      const next = Math.max(0, round2(prev + randDelta()));
+      const next = Math.max(0, round2(prev + marketDelta(prev)));
       updateCandle(next);
       return next;
     });
@@ -185,67 +326,96 @@ export default function TradingArenaPage() {
 
   function placeMarket(action: OrderAction, q: number) {
     if (q <= 0) return;
-    const price = action === "buy" ? ask : bid; // market: buy su ask, sell su bid
+
+    const price = action === "buy" ? ask : bid;
     const t = Date.now();
 
-    setPos((cur) => {
-      let realizedThis = 0;
-      let next: Position | null = cur;
+    let realizedThis = 0;
+    let next: Position | null = pos;
 
-      if (!cur) {
-        // non c'è posizione: buy → long, sell → short
-        next =
-          action === "buy"
-            ? { side: "long", qty: q, avg: price }
-            : { side: "short", qty: q, avg: price };
-      } else if (cur.side === "long") {
-        if (action === "buy") {
-          // aumenta long (media prezzo)
-          const newQty = cur.qty + q;
-          const newAvg = (cur.avg * cur.qty + price * q) / newQty;
-          next = { side: "long", qty: newQty, avg: round2(newAvg) };
-        } else {
-          // sell: chiudi long (parziale o totale)
-          const closeQty = Math.min(q, cur.qty);
-          realizedThis = (price - cur.avg) * closeQty;
-          if (closeQty === cur.qty) {
-            next = null; // chiusa tutta
-          } else {
-            next = { side: "long", qty: cur.qty - closeQty, avg: cur.avg };
-          }
-        }
+    if (!pos) {
+      // Nessuna posizione aperta: BUY apre LONG, SELL apre SHORT.
+      next =
+        action === "buy"
+          ? { side: "long", qty: q, avg: price }
+          : { side: "short", qty: q, avg: price };
+    } else if (pos.side === "long") {
+      if (action === "buy") {
+        // Aumenta il LONG e ricalcola il prezzo medio.
+        const newQty = pos.qty + q;
+        const newAvg = (pos.avg * pos.qty + price * q) / newQty;
+        next = { side: "long", qty: newQty, avg: round2(newAvg) };
       } else {
-        // cur.side === "short"
-        if (action === "sell") {
-          // aumenta short (media prezzo)
-          const newQty = cur.qty + q;
-          const newAvg = (cur.avg * cur.qty + price * q) / newQty;
-          next = { side: "short", qty: newQty, avg: round2(newAvg) };
+        // SELL contro un LONG: chiude la posizione e, se l'ordine e' piu grande,
+        // usa la quantita residua per aprire uno SHORT allo stesso prezzo.
+        const closeQty = Math.min(q, pos.qty);
+        const residualQty = Math.max(0, q - pos.qty);
+
+        realizedThis = (price - pos.avg) * closeQty;
+
+        if (q < pos.qty) {
+          next = {
+            side: "long",
+            qty: pos.qty - q,
+            avg: pos.avg,
+          };
+        } else if (residualQty > 0) {
+          next = {
+            side: "short",
+            qty: residualQty,
+            avg: price,
+          };
         } else {
-          // buy: chiudi short
-          const closeQty = Math.min(q, cur.qty);
-          realizedThis = (cur.avg - price) * closeQty;
-          if (closeQty === cur.qty) {
-            next = null;
-          } else {
-            next = { side: "short", qty: cur.qty - closeQty, avg: cur.avg };
-          }
+          next = null;
         }
       }
+    } else {
+      // Posizione SHORT.
+      if (action === "sell") {
+        // Aumenta lo SHORT e ricalcola il prezzo medio.
+        const newQty = pos.qty + q;
+        const newAvg = (pos.avg * pos.qty + price * q) / newQty;
+        next = { side: "short", qty: newQty, avg: round2(newAvg) };
+      } else {
+        // BUY contro uno SHORT: copre la posizione e, se l'ordine e' piu grande,
+        // usa la quantita residua per aprire un LONG allo stesso prezzo.
+        const closeQty = Math.min(q, pos.qty);
+        const residualQty = Math.max(0, q - pos.qty);
 
-      // aggiorna pnl e log
-      if (realizedThis !== 0) {
-        setRealized((prev) => round2(prev + realizedThis));
+        realizedThis = (pos.avg - price) * closeQty;
+
+        if (q < pos.qty) {
+          next = {
+            side: "short",
+            qty: pos.qty - q,
+            avg: pos.avg,
+          };
+        } else if (residualQty > 0) {
+          next = {
+            side: "long",
+            qty: residualQty,
+            avg: price,
+          };
+        } else {
+          next = null;
+        }
       }
-      logFill({
-        t,
-        action,
-        price,
-        qty: q,
-        realized: round2(realizedThis),
-      });
+    }
 
-      return next;
+    // Gli aggiornamenti con side effect restano FUORI dal callback di setPos,
+    // cosi React Strict Mode non duplica log o P/L.
+    setPos(next);
+
+    if (realizedThis !== 0) {
+      setRealized((prev) => round2(prev + realizedThis));
+    }
+
+    logFill({
+      t,
+      action,
+      price,
+      qty: q,
+      realized: round2(realizedThis),
     });
   }
 
@@ -336,6 +506,24 @@ export default function TradingArenaPage() {
             onChange={(e) => setSpread(Number(e.target.value) || 0)}
             className="border rounded px-2 py-1 w-28"
           />
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-600">Market mode</label>
+          <select
+            value={marketMode}
+            disabled={running}
+            onChange={(e) => setMarketMode(e.target.value as MarketMode)}
+            className="border rounded px-2 py-1 disabled:bg-gray-100"
+          >
+            <option value="random">Random Walk</option>
+            <option value="trend-up">Trend Up</option>
+            <option value="trend-down">Trend Down</option>
+            <option value="mean-reversion">Mean Reversion</option>
+            <option value="high-vol">High Volatility</option>
+            <option value="choppy">Choppy</option>
+            <option value="crash">Crash / Panic</option>
+          </select>
         </div>
 
         <div>

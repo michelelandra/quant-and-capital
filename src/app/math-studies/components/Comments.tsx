@@ -10,151 +10,255 @@ type Comment = {
   created_at: string;
 };
 
-export default function Comments({ postId }: { postId?: string }) {
+export default function Comments({
+  postId,
+  onCountChange,
+}: {
+  postId?: string;
+  onCountChange?: (count: number) => void;
+}) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [author, setAuthor] = useState("");
   const [body, setBody] = useState("");
+
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // ⛔ Non chiamare l'API se non c'è un postId valido
-    if (!postId) {
+    const currentPostId: string = postId ?? "";
+
+    if (!currentPostId) {
       setComments([]);
       setLoading(false);
       setError(null);
+      onCountChange?.(0);
       return;
     }
 
     let cancelled = false;
-    const load = async () => {
+
+    async function load() {
       setLoading(true);
       setError(null);
+
       try {
         const res = await fetch(
-          `/api/math-studies/comments/fetch?postId=${encodeURIComponent(postId)}`,
-          { cache: "no-store" }
-        );
-        if (!res.ok) {
-          // Provo a leggere JSON, altrimenti testo grezzo
-          let msg = "";
-          try {
-            const j = await res.json();
-            msg = j?.error || `HTTP ${res.status}`;
-          } catch {
-            msg = await res.text();
+          `/api/math-studies/comments/fetch?postId=${encodeURIComponent(
+            currentPostId
+          )}`,
+          {
+            cache: "no-store",
           }
-          throw new Error(msg || `HTTP ${res.status}`);
+        );
+
+        if (!res.ok) {
+          let message = "";
+
+          try {
+            const json = await res.json();
+            message = json?.error || `HTTP ${res.status}`;
+          } catch {
+            message = await res.text();
+          }
+
+          throw new Error(
+            message || `HTTP ${res.status}`
+          );
         }
-        const data: Comment[] = await res.json();
-        if (!cancelled) setComments(data);
-      } catch (e: any) {
-        console.error("Comments fetch failed:", e);
+
+        const data = await res.json();
+
         if (!cancelled) {
-          setComments([]); // non bloccare la pagina
-          setError(e?.message || "Failed to load comments");
+          const list: Comment[] = Array.isArray(data)
+            ? data
+            : [];
+
+          setComments(list);
+          onCountChange?.(list.length);
+        }
+      } catch (err) {
+        console.error(
+          "Comments fetch failed:",
+          err
+        );
+
+        if (!cancelled) {
+          setComments([]);
+          onCountChange?.(0);
+
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load comments"
+          );
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-    };
+    }
 
     load();
+
     return () => {
       cancelled = true;
     };
-  }, [postId]);
+  }, [postId, onCountChange]);
 
   async function addComment() {
-    if (!postId) {
-      alert("Missing postId: impossibile aggiungere il commento.");
+    const currentPostId: string = postId ?? "";
+
+    if (!currentPostId || !body.trim()) {
       return;
     }
-    if (!body.trim()) return;
+
+    setSubmitting(true);
 
     try {
-      const res = await fetch("/api/math-studies/comments/add", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          postId,
-          author: author || "Anonymous",
-          body,
-          hp: "", // honeypot
-        }),
-      });
+      const res = await fetch(
+        "/api/math-studies/comments/add",
+        {
+          method: "POST",
 
-      const data = await res.json().catch(() => ({}));
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            postId: currentPostId,
+            author:
+              author.trim() || "Anonymous",
+            body: body.trim(),
+            hp: "",
+          }),
+        }
+      );
+
+      const data = await res
+        .json()
+        .catch(() => ({}));
+
       if (!res.ok) {
-        throw new Error(data?.error || `HTTP ${res.status}`);
+        throw new Error(
+          data?.error ||
+            `HTTP ${res.status}`
+        );
       }
 
-      // Aggiungo in coda il nuovo commento
-      setComments((prev) => [...prev, data as Comment]);
+      setComments((prev) => {
+        const next = [
+          ...prev,
+          data as Comment,
+        ];
+
+        onCountChange?.(next.length);
+
+        return next;
+      });
+
       setBody("");
       setAuthor("");
-    } catch (e: any) {
-      alert(e?.message || "Error adding comment");
+    } catch (err) {
+      alert(
+        err instanceof Error
+          ? err.message
+          : "Error adding comment"
+      );
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
-    <div className="mt-6 space-y-4">
-      <h3 className="font-semibold">Comments</h3>
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold">
+        Comments
+      </h3>
 
-      {!postId && (
+      {loading && (
         <p className="text-sm text-gray-500">
-          No comments available for this item.
+          Loading comments…
         </p>
       )}
 
-      {postId && loading && <p className="text-sm">Loading…</p>}
-      {postId && error && (
-        <p className="text-sm text-red-500">Error: {error}</p>
-      )}
-      {postId && comments.length === 0 && !loading && !error && (
-        <p className="text-sm text-gray-500">No comments yet.</p>
+      {error && (
+        <p className="text-sm text-red-500">
+          Error: {error}
+        </p>
       )}
 
-      {postId && (
-        <>
-          <div className="space-y-2">
-            {comments.map((c) => (
-              <div key={c.id} className="border rounded p-2">
-                <p className="text-sm">
-                  <b>{c.author}</b> •{" "}
-                  {new Date(c.created_at).toLocaleString()}
-                </p>
-                <p>{c.body}</p>
-              </div>
-            ))}
-          </div>
+      {!loading &&
+        !error &&
+        comments.length === 0 && (
+          <p className="text-sm text-gray-500">
+            No comments yet. Be the first
+            to comment.
+          </p>
+        )}
 
-          <div className="mt-3 flex flex-col gap-2">
-            <input
-              type="text"
-              placeholder="Your name (optional)"
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              className="border rounded p-1"
-            />
-            <textarea
-              placeholder="Write a comment..."
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              className="border rounded p-1"
-            />
-            <button
-              onClick={addComment}
-              disabled={!body.trim()}
-              className="bg-blue-500 text-white rounded p-1 hover:bg-blue-600 disabled:opacity-50"
-            >
-              Add Comment
-            </button>
+      <div className="space-y-3">
+        {comments.map((comment) => (
+          <div
+            key={comment.id}
+            className="border rounded-lg p-3 bg-gray-50"
+          >
+            <div className="flex flex-wrap items-baseline gap-2">
+              <strong className="text-sm">
+                {comment.author}
+              </strong>
+
+              <span className="text-xs text-gray-500">
+                {new Date(
+                  comment.created_at
+                ).toLocaleString()}
+              </span>
+            </div>
+
+            <p className="mt-2 whitespace-pre-wrap">
+              {comment.body}
+            </p>
           </div>
-        </>
-      )}
+        ))}
+      </div>
+
+      <div className="space-y-2 pt-2">
+        <input
+          type="text"
+          maxLength={80}
+          placeholder="Your name (optional)"
+          value={author}
+          onChange={(e) =>
+            setAuthor(e.target.value)
+          }
+          className="border rounded p-2 w-full"
+        />
+
+        <textarea
+          maxLength={3000}
+          placeholder="Write a comment..."
+          value={body}
+          onChange={(e) =>
+            setBody(e.target.value)
+          }
+          className="border rounded p-2 w-full min-h-24"
+        />
+
+        <button
+          onClick={addComment}
+          disabled={
+            !body.trim() || submitting
+          }
+          className="bg-blue-600 text-white rounded px-4 py-2 disabled:opacity-50"
+        >
+          {submitting
+            ? "Posting…"
+            : "Post comment"}
+        </button>
+      </div>
     </div>
   );
 }
-
